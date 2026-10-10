@@ -129,7 +129,7 @@ trap - EXIT
 
 cp -f "$STEAMLOG" "$LOGDIR/$TS.log" 2>/dev/null || echo "(no $STEAMLOG)" > "$LOGDIR/$TS.log"
 L=$LOGDIR/$TS.log
-unh=$(grep -c "Unhandled exception\|wine: Unhandled" "$L")
+unh=$(grep -cE "wine: Unhandled exception|:seh:.*Unhandled exception" "$L")
 errs=$(grep -c "^[0-9a-f]*:err:\|^err:\|:err:" "$L")
 
 echo "===== VERDICT ====="

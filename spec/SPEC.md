@@ -357,7 +357,7 @@ The byte at 0x12AB963 is never read.
    - Calls `0x54E870`: for each non-null slot, `ShaderManager::releasePixelShader` 0x54E5C0, which calls `0x54E130`.
    - Then frees the slot array.
 4. `0x54E130` (thiscall, ecx=ShaderManager unused, args `(shader, buckets)`, `ret 8`) decrements refCount. At 0 it unlinks the shader from its bucket and calls `internal.vtbl[0](1)`, which is 0x54C900, then 0x54C910.
-5. `~PixelShader` 0x54C910:
+5. `~PixelShader` 0x54C910 (**scalar deleting dtor**: thiscall ecx=this, 1 stack arg `flags`, `ret 4`, returns `this` in eax; bit 0 of flags frees the object; 0x54C900 is the thunk from the InternalResource subobject, `sub ecx,0xc; jmp 0x54C910`) [V]:
    - `cancelOrAwait` (0x54C850). This is queue safe: it nulls the slot or waits.
    - InternalResource `vtbl[2]` releases the ID3D11PixelShader.
    - Frees the +0x30 vector and the ShaderBinary.
@@ -368,7 +368,7 @@ The byte at 0x12AB963 is never read.
 - In the shipped game this cannot happen: only builtin libs feed the vector, and they live until device shutdown.
 - **It becomes reachable if per-level libs are fed into the vector** (forcing the 0x54EA00 gate true, or a DLL precreate list).
 - Any DLL precreate list must hold a reference or remove entries. Usable hook points:
-  - 0x54C910 (PS dtor; 7-byte prologue, no relative operand).
+  - 0x54C910 (PS scalar deleting dtor, thiscall(this, flags), `ret 4`, returns this; 7-byte prologue, no relative operand).
   - 0x54E130 (refcount drop; prologue `83 ec 08 8b 54 24 0c`).
   - 0x54EF40 (table dtor, before shaders die; prologue `56 8b f1 c7 06 60 8c a9 00`).
 - Taking a reference by incrementing +0x28 is possible, but then the DLL must release through 0x54E5C0 itself [?].
@@ -467,7 +467,7 @@ Methods are COM style: `__stdcall`, explicit `this`, callee cleans. Arg counts w
 | 0x54C8D0 precreateOne | 0x14C8D0 | thiscall, 0 args | 83 79 18 00 c6 05 63 b9 2a 01 01 | 11, absolute operand |
 | 0x54F890 setPS | 0x14F890 | thiscall ecx=sm, 1 arg, ret 4 | 56 8b 74 24 08 | 5, clean |
 | 0x54F9C0 setVS | 0x14F9C0 | thiscall ecx=sm, 1 arg, ret 4 | 56 8b 74 24 08 | 5, clean |
-| 0x54C910 ~PixelShader | 0x14C910 | thiscall, 0 args | 56 8b f1 57 8d 7e 0c | 7, clean |
+| 0x54C910 ~PixelShader | 0x14C910 | thiscall, 1 arg (flags), ret 4, returns this | 56 8b f1 57 8d 7e 0c | 7, clean |
 | 0x54E130 shaderUnref | 0x14E130 | thiscall, 2 args (shader, buckets), ret 8 | 83 ec 08 8b 54 24 0c | 7, clean |
 | 0x54EF40 ~PixelShaderTable | 0x14EF40 | thiscall, 1 arg, ret 4 | 56 8b f1 c7 06 60 8c a9 00 | 9, absolute operand |
 | 0x54F000 queueUsed | 0x14F000 | thiscall ecx=table | 51 a1 40 b9 2a 01 | 6, absolute operand |
@@ -494,3 +494,9 @@ Methods are COM style: `__stdcall`, explicit `this`, callee cleans. Arg counts w
 5. **IO threads:** which thread runs `ShaderLib::fill` (0x547020) for streamed libraries is not traced (main thread or an IO thread).
 6. **Create\* scan coverage:** the scan is heuristic. Calls through device pointers cached elsewhere could be missed (Texture2D in 0x52FF00 was found manually).
 7. **Game folder state:** at the time of writing (2026-10-10 13:50), the game folder contains a non-stock `DFEngine.dll` (mingw build, 224506 bytes, sha256 e27b168f...) and `DFEngine_orig.dll` (the original, sha256 03032490...). These were placed by a parallel task, not by this spec task. The exe there is stock.
+
+## DLL implementation notes (dxhrfix, src/)
+
+- Hook B (precreate) lists pixel shaders from 0x54F000 / 0x54F080 and creates them on a DLL thread pool. The device manager teardown is 0x54C200: 0x54C040 (dm dtor, which calls shutdown 0x54A440 at 0x54C08C), then the free at 0x54C221, then the global is cleared at 0x54C229. The DLL hooks 0x54A440, so it stops the pool before the dm memory is freed.
+- **Precreate stays off for the rest of the process after any dm shutdown.** The shutdown flag is never cleared. A device manager created later in the same process gets no precreate; Hook A (request, await, cancelOrAwait) keeps working.
+- Table state +0x1C is 0 after the ctor 0x54EE20 (`xor ebp,ebp` then `mov [esi+0x1c],ebp` at 0x54EE7F). The DLL skips a table whose state is already 2 or 3 when 0x54F000 / 0x54F080 runs, so a table is listed once.

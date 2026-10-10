@@ -4,8 +4,8 @@ CXXFLAGS := -O2 -std=c++11 -Wall -Wextra -Wno-unused-parameter -fno-exceptions -
 LDFLAGS  := -shared -static-libgcc -static-libstdc++ -Wl,--enable-stdcall-fixup
 LIBS     := -lbcrypt
 
-SRCS := proxy/dfengine_proxy.cpp hooklib/hooklib.cpp src/dxhrfix_hooks.cpp
-HDRS := hooklib/hooklib.h src/dxhrfix_hooks.h
+SRCS := proxy/dfengine_proxy.cpp hooklib/hooklib.cpp src/dxhrfix_hooks.cpp src/dxhrfix_precreate.cpp
+HDRS := hooklib/hooklib.h src/dxhrfix_hooks.h src/dxhrfix_internal.h
 
 all: dist/DFEngine.dll
 

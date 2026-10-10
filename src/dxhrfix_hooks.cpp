@@ -9,8 +9,9 @@
 // filled semaphore can be released out of slot order. The worker can then
 // claim a half-written slot (race R2: the awaiter later sees idx==slot and
 // creates concurrently with the worker) or a stale one (race R1: orphaned
-// item, dtor waits forever). The replacement sets idx=0x400 before
-// pending=1, waits for a free slot outside the CS, then takes the slot
+// item, dtor waits forever). The replacement, under the device manager CS,
+// sets {pending, requested} with one 16-bit lock cmpxchg (0 -> 0x0101) and
+// idx=0x400, waits for a free slot outside the CS, then takes the slot
 // number, publishes {item, arg}, writes idx and releases the filled
 // semaphore all inside the device manager CS. Semaphore releases therefore
 // happen in slot order and the worker (which claims under the same CS) never
@@ -29,21 +30,13 @@
 // thread. It cancels the queued slot under the CS (with the slot == item
 // check the stock cancel 0x54A060 lacks) or waits for the worker.
 
-#include "dxhrfix_hooks.h"
+#include "dxhrfix_internal.h"
 #include "../hooklib/hooklib.h"
 
-#include <windows.h>
-#include <stdint.h>
 #include <string.h>
-
-#define FAA __attribute__((force_align_arg_pointer))
-#define THISCALL __attribute__((thiscall))
-#define BARRIER() __asm__ __volatile__("" ::: "memory")
 
 // ---------------------------------------------------------------- engine layout
 
-static const uint32_t VA_BASE = 0x400000;
-static const uint32_t VA_DEVICE_MANAGER = 0x12AB940;   // PCDX11DeviceManager*
 static const uint32_t VA_REQUEST = 0x54C7D0;
 static const uint32_t VA_ENQUEUE = 0x54A000;
 static const uint32_t VA_AWAIT = 0x54C800;
@@ -52,25 +45,15 @@ static const uint32_t VA_LATENCY_CTX = 0x54AB80;       // 8b 51 30 6a 01 50 ff d
 static const uint32_t VA_LATENCY_IMM = 0x54AB84;       // the 01 of "6a 01"
 
 static const uint32_t DM_RING = 0x180;       // {item*, arg} x 0x400
-static const uint32_t DM_CS = 0xA184;        // CRITICAL_SECTION
 static const uint32_t DM_ENQ_COUNT = 0xA19C; // LONG, InterlockedIncrement
 static const uint32_t DM_SEM_FREE = 0xA1A4;
 static const uint32_t DM_SEM_FILLED = 0xA1A8;
-static const uint32_t RING_SLOTS = 0x400;
-
-struct AsyncItem {
-    void **vtbl;                 // [0] asyncCreate(arg), thiscall, ret 4
-    volatile uint32_t idx;       // queue index, 0x400 = claimed / none
-    volatile uint8_t pending;
-    volatile uint8_t requested;
-};
 
 struct RingSlot {
     AsyncItem *volatile item;
     volatile uint32_t arg;
 };
 
-typedef void (THISCALL *create_fn)(AsyncItem *, uint32_t);
 typedef int (THISCALL *fn0_t)(AsyncItem *);
 typedef int (THISCALL *enqueue_fn)(void *dm, AsyncItem *, uint32_t);
 
@@ -95,17 +78,19 @@ static const uint8_t kLatencyCtx[8] = {0x8b, 0x51, 0x30, 0x6a, 0x01, 0x50, 0xff,
 
 // ---------------------------------------------------------------- state
 
-static dxhrfix_log_fn g_log;
-static int g_logLevel;
-static unsigned char *g_base;
-static void *volatile *g_dmPtr;
+dxhrfix_log_fn g_log;
+int g_logLevel;
+unsigned char *g_base;
+void *volatile *g_dmPtr;
+int64_t g_qpcFreq;                    // ticks per second
 static fn0_t g_awaitTramp;
 static fn0_t g_cancelTramp;
 static enqueue_fn g_stockEnqueue;
-static int64_t g_qpcFreq;            // ticks per second
 static bool g_installed;
+static bool g_precreateOn;
 
 static volatile LONG g_requests;      // request: enqueued through the serialized path
+static volatile LONG g_requestLost;   // request: requested flag already taken (cmpxchg lost)
 static volatile LONG g_inline;        // await: created inline on the calling thread
 static volatile LONG g_inlineLate;    // ...of which claimed by a re-check inside the wait loop
 static volatile LONG g_fallback;      // await: worker owned it, waited
@@ -117,30 +102,9 @@ static volatile LONG g_noDm;          // device manager null: stock path
 static volatile LONG g_events;
 static volatile LONG g_maxWaitUs;     // longest fallback wait (await + dtor)
 static volatile LONG g_maxCreateUs;   // longest inline create
-static volatile LONG g_reportedFinal;
 static volatile LONG g_reporterStarted;
 
-#define LOG(lvl, ...) do { if (g_log && (lvl) <= g_logLevel) g_log((lvl), __VA_ARGS__); } while (0)
-
-static inline unsigned char *rebase(uint32_t va) { return g_base + (va - VA_BASE); }
-
-static inline int64_t qpc(void)
-{
-    LARGE_INTEGER t;
-    QueryPerformanceCounter(&t);
-    return t.QuadPart;
-}
-
-static inline LONG ticks_to_us(int64_t d)
-{
-    if (d <= 0 || g_qpcFreq <= 0) return 0;
-    int64_t us = d / g_qpcFreq * 1000000 + (d % g_qpcFreq) * 1000000 / g_qpcFreq;
-    return us > 2000000000 ? 2000000000 : (LONG)us;
-}
-
-static inline LONG us_since(int64_t t0) { return ticks_to_us(qpc() - t0); }
-
-static void atomic_max(volatile LONG *dst, LONG v)
+void atomic_max(volatile LONG *dst, LONG v)
 {
     LONG cur = *dst;
     while (v > cur) {
@@ -154,10 +118,9 @@ static void count_event(void)
 {
     LONG n = InterlockedIncrement(&g_events);
     if (n % 1000 == 0)
-        dxhrfix_hooks_report(0);
+        dxhrfix_hooks_report();
 }
 
-static inline CRITICAL_SECTION *dm_cs(unsigned char *dm) { return (CRITICAL_SECTION *)(dm + DM_CS); }
 static inline RingSlot *dm_ring(unsigned char *dm) { return (RingSlot *)(dm + DM_RING); }
 
 // Under the CS: if item still sits unclaimed in its slot, take it (null the
@@ -236,21 +199,36 @@ static LONG wait_pending(AsyncItem *item, const char *who, unsigned char *dm, bo
 
 // ---------------------------------------------------------------- detours
 
-static FAA int THISCALL request_detour(AsyncItem *item, uint32_t arg)
+int request_impl(AsyncItem *item, uint32_t arg, bool zero_d3d)
 {
+    unsigned char *dm = (unsigned char *)*g_dmPtr;   // loaded before any store
     if (item->requested)
         return 1;
-    item->requested = 1;
-    unsigned char *dm = (unsigned char *)*g_dmPtr;
     if (!dm) {                          // stock would fault in enqueue too
-        InterlockedIncrement(&g_noDm);
+        if (__sync_val_compare_and_swap(&item->requested, (uint8_t)0, (uint8_t)1) != 0)
+            return 1;
+        item->idx = RING_SLOTS;
+        BARRIER();
         item->pending = 1;
+        InterlockedIncrement(&g_noDm);
         return g_stockEnqueue(dm, item, arg);
     }
-    item->idx = RING_SLOTS;             // never garbage while pending
-    BARRIER();
-    item->pending = 1;
-    BARRIER();
+    // Claim under the dm CS with one 16-bit lock cmpxchg on {pending (+8, low
+    // byte), requested (+9, high byte)} from 0 to 0x0101, same as the
+    // precreate pool: unlocked readers (setPS/setVS) see both flags or
+    // neither, and a racing requester or pool thread loses cleanly.
+    EnterCriticalSection(dm_cs(dm));
+    bool won = __sync_bool_compare_and_swap((volatile uint16_t *)&item->pending, (uint16_t)0,
+                                            (uint16_t)0x0101);
+    if (won)
+        item->idx = RING_SLOTS;         // never garbage while pending
+    LeaveCriticalSection(dm_cs(dm));
+    if (!won) {
+        InterlockedIncrement(&g_requestLost);
+        return 1;
+    }
+    if (zero_d3d)
+        *(void *volatile *)((unsigned char *)item + 0x18) = NULL;
     // Free slot first, outside the CS: the worker needs the CS to free slots.
     WaitForSingleObject(*(HANDLE *)(dm + DM_SEM_FREE), INFINITE);
     EnterCriticalSection(dm_cs(dm));
@@ -267,6 +245,11 @@ static FAA int THISCALL request_detour(AsyncItem *item, uint32_t arg)
         LOG(2, "request #%ld item %p vtbl %p slot 0x%lX arg 0x%lX", (long)n, item, item->vtbl,
             (unsigned long)i, (unsigned long)arg);
     return 1;
+}
+
+static FAA int THISCALL request_detour(AsyncItem *item, uint32_t arg)
+{
+    return request_impl(item, arg, false);
 }
 
 static FAA int THISCALL await_detour(AsyncItem *item)
@@ -351,7 +334,7 @@ static void hexs(const unsigned char *p, size_t n, char *out)
     out[n ? n * 3 - 1 : 0] = 0;
 }
 
-static bool in_image_readable(uint32_t va, size_t n)
+bool in_image_readable(uint32_t va, size_t n)
 {
     IMAGE_DOS_HEADER *dos = (IMAGE_DOS_HEADER *)g_base;
     IMAGE_NT_HEADERS *nt = (IMAGE_NT_HEADERS *)(g_base + dos->e_lfanew);
@@ -379,8 +362,8 @@ static void rebased_expect(const uint8_t *orig, size_t len, const int *abs, size
     }
 }
 
-static bool install_one(const char *name, uint32_t va, const uint8_t *orig, size_t len,
-                        const int *abs, size_t nabs, size_t prologue, void *detour, fn0_t *tramp)
+bool install_one(const char *name, uint32_t va, const uint8_t *orig, size_t len,
+                 const int *abs, size_t nabs, size_t prologue, void *detour, void **tramp)
 {
     char before[64], after[64], tb[64];
     uint8_t expect[64];
@@ -390,7 +373,7 @@ static bool install_one(const char *name, uint32_t va, const uint8_t *orig, size
     }
     rebased_expect(orig, len, abs, nabs, expect);
     unsigned char *t = rebase(va);
-    hexs(t, 12, before);
+    hexs(t, prologue + 4, before);
     void *tr = NULL;
     int st = hook_install(t, expect, len, prologue, detour, &tr);
     if (st != HOOK_OK) {
@@ -398,8 +381,8 @@ static bool install_one(const char *name, uint32_t va, const uint8_t *orig, size
             hook_strerror(st), before);
         return false;
     }
-    *tramp = (fn0_t)tr;
-    hexs(t, 12, after);
+    *tramp = tr;
+    hexs(t, prologue + 4, after);
     hexs((const unsigned char *)tr, prologue + 5, tb);
     LOG(0, "hook %s VA 0x%06lX @%p installed, verified %u bytes, prologue %u", name,
         (unsigned long)va, t, (unsigned)len, (unsigned)prologue);
@@ -409,32 +392,32 @@ static bool install_one(const char *name, uint32_t va, const uint8_t *orig, size
     return true;
 }
 
-// Whole-function replacement of request: jmp detour + int3 over all 34 bytes.
-static bool replace_request(void)
+// Whole-function replacement: jmp detour + int3 over all len bytes.
+bool replace_fn(const char *name, uint32_t va, const uint8_t *orig, size_t len,
+                const int *abs, size_t nabs, void *detour)
 {
-    char before[128], after[128];
-    const size_t len = sizeof(kRequestOrig);
-    if (!in_image_readable(VA_REQUEST, len)) {
-        LOG(0, "replace request: unreadable, SKIPPED");
+    char before[200], after[200];
+    uint8_t expect[64], rep[64];
+    if (len > sizeof(expect) || !in_image_readable(va, len)) {
+        LOG(0, "replace %s VA 0x%06lX: unreadable, SKIPPED", name, (unsigned long)va);
         return false;
     }
-    uint8_t expect[sizeof(kRequestOrig)], rep[sizeof(kRequestOrig)];
-    rebased_expect(kRequestOrig, len, kRequestAbs, 1, expect);
-    unsigned char *t = rebase(VA_REQUEST);
+    rebased_expect(orig, len, abs, nabs, expect);
+    unsigned char *t = rebase(va);
     hexs(t, len, before);
     memset(rep, 0xCC, len);
     rep[0] = 0xE9;
-    int32_t rel = (int32_t)((unsigned char *)(void *)request_detour - (t + 5));
+    int32_t rel = (int32_t)((unsigned char *)detour - (t + 5));
     memcpy(rep + 1, &rel, 4);
     int st = patch_bytes(t, expect, rep, len);
     if (st != HOOK_OK) {
-        LOG(0, "replace request VA 0x%06lX @%p FAILED: %s (bytes %s)", (unsigned long)VA_REQUEST,
-            t, hook_strerror(st), before);
+        LOG(0, "replace %s VA 0x%06lX @%p FAILED: %s (bytes %s)", name, (unsigned long)va, t,
+            hook_strerror(st), before);
         return false;
     }
     hexs(t, len, after);
-    LOG(0, "replace request VA 0x%06lX @%p, verified %u bytes, detour %p (no trampoline)",
-        (unsigned long)VA_REQUEST, t, (unsigned)len, (void *)request_detour);
+    LOG(0, "replace %s VA 0x%06lX @%p, verified %u bytes, detour %p (no trampoline)", name,
+        (unsigned long)va, t, (unsigned)len, detour);
     LOG(0, "  before: %s", before);
     LOG(0, "  after:  %s", after);
     return true;
@@ -471,70 +454,84 @@ static bool patch_latency(int latency)
     return true;
 }
 
-int dxhrfix_hooks_install(unsigned char *base, int frame_latency, int log_level,
-                          dxhrfix_log_fn log)
+int dxhrfix_hooks_install(unsigned char *base, const DxhrfixOptions *opt, dxhrfix_log_fn log)
 {
     g_base = base;
     g_log = log;
-    g_logLevel = log_level;
+    g_logLevel = opt->log_level;
     g_dmPtr = (void *volatile *)rebase(VA_DEVICE_MANAGER);
     g_stockEnqueue = (enqueue_fn)(void *)rebase(VA_ENQUEUE);
     LARGE_INTEGER f;
     QueryPerformanceFrequency(&f);
     g_qpcFreq = f.QuadPart;
+    int frame_latency = opt->frame_latency;
     if (frame_latency < 1) frame_latency = 1;
     if (frame_latency > 4) frame_latency = 4;
 
     int applied = 0;
-    if (!in_image_readable(VA_DEVICE_MANAGER, 4)) {
-        LOG(0, "hooks: device manager global VA 0x%06lX not in image, nothing patched",
-            (unsigned long)VA_DEVICE_MANAGER);
+    if (!in_image_readable(VA_DEVICE_MANAGER, 4) || !in_image_readable(VA_RENDER_DEVICE10, 4)) {
+        LOG(0, "hooks: engine globals not in image, nothing patched");
         return 0;
     }
     // await first: request's replacement relies on the await hook to re-check
     // the ring, so only replace request when await is hooked as well.
     bool aw = install_one("await", VA_AWAIT, kAwaitOrig, sizeof(kAwaitOrig), kAwaitAbs, 1, 6,
-                          (void *)await_detour, &g_awaitTramp);
+                          (void *)await_detour, (void **)&g_awaitTramp);
     applied += aw;
-    applied += install_one("cancelOrAwait", VA_CANCEL_OR_AWAIT, kCancelOrig, sizeof(kCancelOrig),
-                           kCancelAbs, 2, 7, (void *)cancel_detour, &g_cancelTramp);
+    bool ca = install_one("cancelOrAwait", VA_CANCEL_OR_AWAIT, kCancelOrig, sizeof(kCancelOrig),
+                          kCancelAbs, 2, 7, (void *)cancel_detour, (void **)&g_cancelTramp);
+    applied += ca;
+    bool rq = false;
     if (aw)
-        applied += replace_request();
+        rq = replace_fn("request", VA_REQUEST, kRequestOrig, sizeof(kRequestOrig), kRequestAbs, 1,
+                        (void *)request_detour);
     else
         LOG(0, "replace request: SKIPPED (await hook not installed)");
+    applied += rq;
     applied += patch_latency(frame_latency);
-    LOG(0, "hooks: %d/4 patches applied (device manager ptr @%p = %p)", applied, g_dmPtr,
-        *g_dmPtr);
+    // Hook B relies on the serialized request, the await fallback and the
+    // dtor wait (pending=1 with idx=0x400 means "someone is creating it").
+    if (opt->precreate && aw && ca && rq) {
+        int b = precreate_install(opt);
+        applied += b;
+        g_precreateOn = b > 0;
+    } else {
+        LOG(0, "precreate: %s, Hook B not installed",
+            opt->precreate ? "Hook A incomplete" : "precreate=0");
+    }
+    LOG(0, "hooks: %d patches applied (device manager ptr @%p = %p)", applied, g_dmPtr, *g_dmPtr);
     g_installed = applied > 0;
     return applied;
 }
 
-void dxhrfix_hooks_report(int final)
+void dxhrfix_hooks_report(void)
 {
     if (!g_log || !g_installed) return;
-    if (final && InterlockedExchange(&g_reportedFinal, 1)) return;
-    LOG(1, "%s: requests %ld, inline %ld (late %ld), fallback %ld, await_noop %ld, "
+    LOG(1, "totals: requests %ld (lost %ld), inline %ld (late %ld), fallback %ld, await_noop %ld, "
            "dtor_cancel %ld, dtor_wait %ld, dtor_noop %ld, no_dm %ld, max_wait %ld.%03ld ms, "
            "max_inline_create %ld.%03ld ms",
-        final ? "totals (exit)" : "totals", (long)g_requests, (long)g_inline, (long)g_inlineLate,
+        (long)g_requests, (long)g_requestLost, (long)g_inline, (long)g_inlineLate,
         (long)g_fallback, (long)g_awaitNoop, (long)g_cancelled, (long)g_dtorWaits,
         (long)g_dtorNoop, (long)g_noDm, (long)(g_maxWaitUs / 1000), (long)(g_maxWaitUs % 1000),
         (long)(g_maxCreateUs / 1000), (long)(g_maxCreateUs % 1000));
+    if (g_precreateOn)
+        precreate_report();
 }
 
 static DWORD WINAPI reporter_thread(LPVOID)
 {
     for (;;) {
         Sleep(10000);
-        if (g_reportedFinal) return 0;
-        dxhrfix_hooks_report(0);
+        dxhrfix_hooks_report();
     }
 }
 
-void dxhrfix_hooks_start_reporter(void)
+void dxhrfix_hooks_start_threads(void)
 {
-    if (!g_installed || g_logLevel < 1) return;
-    if (InterlockedExchange(&g_reporterStarted, 1)) return;
+    if (!g_installed) return;
+    if (g_precreateOn)
+        precreate_start_pool();
+    if (g_logLevel < 1 || InterlockedExchange(&g_reporterStarted, 1)) return;
     HANDLE h = CreateThread(NULL, 0x10000, reporter_thread, NULL, 0, NULL);
     if (h) {
         CloseHandle(h);

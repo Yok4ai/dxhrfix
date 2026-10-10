@@ -39,7 +39,9 @@
 #include "../src/dxhrfix_hooks.h"
 #define PROXY_VERSION "0.2.0-hookA"
 #define DEFAULT_HOOKS 1
+#define DEFAULT_PRECREATE 1
 #else
+#define DEFAULT_PRECREATE 0
 #define PROXY_VERSION "0.1.0"
 #define DEFAULT_HOOKS 0
 #endif
@@ -54,22 +56,24 @@ struct Config {
     int frame_latency;
     int log_level;
     int ad_sdk; // 1 = forward to DFEngine_orig.dll when present, 0 = always stub
+    int pool_threads;          // 0 = auto
+    int precreate_max_per_sec; // 0 = unlimited
 };
-static Config g_cfg = {DEFAULT_HOOKS, 0, 2, 1, 1};
+static Config g_cfg = {DEFAULT_HOOKS, DEFAULT_PRECREATE, 2, 1, 1, 0, 0};
 
 static wchar_t g_exeDir[MAX_PATH];
 static wchar_t g_exePath[MAX_PATH];
 static HANDLE g_log = INVALID_HANDLE_VALUE;
 static CRITICAL_SECTION g_logLock;
-static volatile LONG g_exiting; // DLL_PROCESS_DETACH: other threads may be dead, do not block
+static volatile LONG g_exiting; // DLL_PROCESS_DETACH: other threads may be dead, log nothing
 static volatile LONG g_flushAll = 1; // flush every line only during init and detach (an fsync under Wine)
 
 // ---------------------------------------------------------------- logging
 
 static void dlogv(int level, const char *fmt, va_list ap)
 {
-    if (g_log == INVALID_HANDLE_VALUE || level > g_cfg.log_level)
-        return;
+    if (g_log == INVALID_HANDLE_VALUE || level > g_cfg.log_level || g_exiting)
+        return;   // nothing is formatted during DLL_PROCESS_DETACH
     char buf[1024];
     SYSTEMTIME st;
     GetLocalTime(&st);
@@ -82,17 +86,12 @@ static void dlogv(int level, const char *fmt, va_list ap)
     n += m;
     buf[n++] = '\r';
     buf[n++] = '\n';
-    bool locked = true;
-    if (g_exiting)
-        locked = TryEnterCriticalSection(&g_logLock) != 0;
-    else
-        EnterCriticalSection(&g_logLock);
+    EnterCriticalSection(&g_logLock);
     DWORD w;
     WriteFile(g_log, buf, (DWORD)n, &w, NULL);
-    if (g_flushAll || g_exiting)
+    if (g_flushAll)
         FlushFileBuffers(g_log);
-    if (locked)
-        LeaveCriticalSection(&g_logLock);
+    LeaveCriticalSection(&g_logLock);
 }
 
 static void dlog(int level, const char *fmt, ...)
@@ -148,6 +147,8 @@ static void load_config(void)
     g_cfg.frame_latency = ini_int(ini, L"frame_latency", g_cfg.frame_latency);
     g_cfg.log_level = ini_int(ini, L"log_level", g_cfg.log_level);
     g_cfg.ad_sdk = ini_int(ini, L"ad_sdk", g_cfg.ad_sdk);
+    g_cfg.pool_threads = ini_int(ini, L"pool_threads", g_cfg.pool_threads);
+    g_cfg.precreate_max_per_sec = ini_int(ini, L"precreate_max_per_sec", g_cfg.precreate_max_per_sec);
     if (g_cfg.frame_latency < 1) g_cfg.frame_latency = 1;
     if (g_cfg.frame_latency > 4) g_cfg.frame_latency = 4;
 }
@@ -350,12 +351,21 @@ static void early_init(void)
     init_log();
     unsigned char *base = (unsigned char *)GetModuleHandleW(NULL);
     dlog(0, "exe base %p (preferred 0x400000), proxy base %p", base, g_self);
-    dlog(0, "config: hooks=%d precreate=%d frame_latency=%d log_level=%d ad_sdk=%d",
-         g_cfg.hooks, g_cfg.precreate, g_cfg.frame_latency, g_cfg.log_level, g_cfg.ad_sdk);
+    dlog(0, "config: hooks=%d precreate=%d frame_latency=%d log_level=%d ad_sdk=%d "
+            "pool_threads=%d precreate_max_per_sec=%d",
+         g_cfg.hooks, g_cfg.precreate, g_cfg.frame_latency, g_cfg.log_level, g_cfg.ad_sdk,
+         g_cfg.pool_threads, g_cfg.precreate_max_per_sec);
     check_hook_sites(base);
 #ifdef DXHRFIX_HOOKS
-    if (g_cfg.hooks)
-        dxhrfix_hooks_install(base, g_cfg.frame_latency, g_cfg.log_level, dlog);
+    if (g_cfg.hooks) {
+        DxhrfixOptions o;
+        o.frame_latency = g_cfg.frame_latency;
+        o.log_level = g_cfg.log_level;
+        o.precreate = g_cfg.precreate;
+        o.pool_threads = g_cfg.pool_threads;
+        o.precreate_max_per_sec = g_cfg.precreate_max_per_sec;
+        dxhrfix_hooks_install(base, &o, dlog);
+    }
     else
         dlog(0, "hooks=0: stock behavior, nothing patched");
 #else
@@ -372,7 +382,7 @@ static void do_init(void)
     dlog(0, "GetDFEngine -> %p (%s)", g_engine, g_engine == &g_stub ? "stub" : "orig");
 #ifdef DXHRFIX_HOOKS
     if (g_cfg.hooks)
-        dxhrfix_hooks_start_reporter();
+        dxhrfix_hooks_start_threads();
 #endif
 }
 
@@ -395,11 +405,9 @@ extern "C" BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID)
         DisableThreadLibraryCalls(inst);
         early_init();
     } else if (reason == DLL_PROCESS_DETACH) {
+        // Other threads may be dead holding the CRT or our log lock: log
+        // nothing here (the 10 s reporter carries the totals).
         g_exiting = 1;
-#ifdef DXHRFIX_HOOKS
-        dxhrfix_hooks_report(1);
-#endif
-        dlog(1, "process detach");
     }
     return TRUE;
 }
