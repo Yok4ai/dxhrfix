@@ -1,9 +1,10 @@
 // DFEngine.dll proxy for DXHRDC.exe (Deus Ex HR Director's Cut, Steam 238010).
 //
-// Stage 1: no patching. On the first GetDFEngine() call (outside loader lock)
-// it reads dxhrfix.ini, opens dxhrfix.log, logs module base, exe size and
-// sha256, byte-checks the planned hook sites, then forwards to
-// DFEngine_orig.dll or returns a no-op stub object.
+// DllMain PROCESS_ATTACH reads dxhrfix.ini, opens dxhrfix.log, byte-checks
+// the hook sites and (top-level build, -DDXHRFIX_HOOKS, hooks=1) installs
+// the src/ hooks. The first GetDFEngine() call (outside loader lock) logs
+// exe size and sha256, then forwards to DFEngine_orig.dll or returns a no-op
+// stub object. The proxy/ Makefile builds the stage 1 variant (no patching).
 //
 // How the exe uses the DFEngine object (from DXHRDC.objdump.txt):
 //   GetDFEngine() takes no args, returns the object pointer (call site 0x628260
@@ -34,7 +35,14 @@
 #include <stdarg.h>
 #include <string.h>
 
+#ifdef DXHRFIX_HOOKS
+#include "../src/dxhrfix_hooks.h"
+#define PROXY_VERSION "0.2.0-hookA"
+#define DEFAULT_HOOKS 1
+#else
 #define PROXY_VERSION "0.1.0"
+#define DEFAULT_HOOKS 0
+#endif
 
 static HMODULE g_self;
 static volatile LONG g_initState; // 0 none, 1 running, 2 done
@@ -47,12 +55,14 @@ struct Config {
     int log_level;
     int ad_sdk; // 1 = forward to DFEngine_orig.dll when present, 0 = always stub
 };
-static Config g_cfg = {0, 0, 2, 1, 1};
+static Config g_cfg = {DEFAULT_HOOKS, 0, 2, 1, 1};
 
 static wchar_t g_exeDir[MAX_PATH];
 static wchar_t g_exePath[MAX_PATH];
 static HANDLE g_log = INVALID_HANDLE_VALUE;
 static CRITICAL_SECTION g_logLock;
+static volatile LONG g_exiting; // DLL_PROCESS_DETACH: other threads may be dead, do not block
+static volatile LONG g_flushAll = 1; // flush every line only during init and detach (an fsync under Wine)
 
 // ---------------------------------------------------------------- logging
 
@@ -72,11 +82,17 @@ static void dlogv(int level, const char *fmt, va_list ap)
     n += m;
     buf[n++] = '\r';
     buf[n++] = '\n';
-    EnterCriticalSection(&g_logLock);
+    bool locked = true;
+    if (g_exiting)
+        locked = TryEnterCriticalSection(&g_logLock) != 0;
+    else
+        EnterCriticalSection(&g_logLock);
     DWORD w;
     WriteFile(g_log, buf, (DWORD)n, &w, NULL);
-    FlushFileBuffers(g_log);
-    LeaveCriticalSection(&g_logLock);
+    if (g_flushAll || g_exiting)
+        FlushFileBuffers(g_log);
+    if (locked)
+        LeaveCriticalSection(&g_logLock);
 }
 
 static void dlog(int level, const char *fmt, ...)
@@ -133,7 +149,7 @@ static void load_config(void)
     g_cfg.log_level = ini_int(ini, L"log_level", g_cfg.log_level);
     g_cfg.ad_sdk = ini_int(ini, L"ad_sdk", g_cfg.ad_sdk);
     if (g_cfg.frame_latency < 1) g_cfg.frame_latency = 1;
-    if (g_cfg.frame_latency > 16) g_cfg.frame_latency = 16;
+    if (g_cfg.frame_latency > 4) g_cfg.frame_latency = 4;
 }
 
 // ---------------------------------------------------------------- exe info
@@ -198,6 +214,7 @@ static const HookSite kSites[] = {
     {"awaitResource entry", 0x54C800, {0x56, 0x8b, 0xf1, 0x8a, 0x46, 0x08, 0x84, 0xc0}, 8},
     {"awaitResource Sleep(1) push", 0x54C811, {0x6a, 0x01}, 2},
     {"awaitResource twin Sleep(1) push", 0x54C877, {0x6a, 0x01}, 2},
+    {"cancelOrAwait entry", 0x54C850, {0x56, 0x8b, 0xf1, 0x80, 0x7e, 0x09, 0x00, 0x74}, 8},
     {"SetMaximumFrameLatency(1) call", 0x54AB80, {0x8b, 0x51, 0x30, 0x6a, 0x01, 0x50, 0xff, 0xd2}, 8},
 };
 
@@ -236,7 +253,7 @@ static int check_hook_sites(unsigned char *base)
         dlog(0, "site %-34s VA 0x%06lX @%p %s (want %s, got %s)", s.name, s.va, p,
              match ? "MATCH" : "MISMATCH", want, got);
     }
-    dlog(0, "hook sites: %d/%d match; patching nothing (stage 1)", good, count);
+    dlog(0, "hook sites: %d/%d match", good, count);
     return good;
 }
 
@@ -312,7 +329,10 @@ static void *resolve_engine(void)
     return e;
 }
 
-static void do_init(void)
+// Early part: runs from DllMain PROCESS_ATTACH, i.e. before the exe entry
+// point and before any game thread exists (render thread, async-create
+// worker). Only kernel32 calls here (no LoadLibrary, no bcrypt).
+static void early_init(void)
 {
     InitializeCriticalSection(&g_logLock);
     build_stub();
@@ -332,10 +352,28 @@ static void do_init(void)
     dlog(0, "exe base %p (preferred 0x400000), proxy base %p", base, g_self);
     dlog(0, "config: hooks=%d precreate=%d frame_latency=%d log_level=%d ad_sdk=%d",
          g_cfg.hooks, g_cfg.precreate, g_cfg.frame_latency, g_cfg.log_level, g_cfg.ad_sdk);
-    log_exe_info();
     check_hook_sites(base);
+#ifdef DXHRFIX_HOOKS
+    if (g_cfg.hooks)
+        dxhrfix_hooks_install(base, g_cfg.frame_latency, g_cfg.log_level, dlog);
+    else
+        dlog(0, "hooks=0: stock behavior, nothing patched");
+#else
+    dlog(0, "stage 1 build: patching nothing");
+#endif
+    g_flushAll = 0; // init done: plain WriteFile from here on (data survives a kill)
+}
+
+// Late part: first GetDFEngine call, outside the loader lock.
+static void do_init(void)
+{
+    log_exe_info();
     g_engine = resolve_engine();
     dlog(0, "GetDFEngine -> %p (%s)", g_engine, g_engine == &g_stub ? "stub" : "orig");
+#ifdef DXHRFIX_HOOKS
+    if (g_cfg.hooks)
+        dxhrfix_hooks_start_reporter();
+#endif
 }
 
 extern "C" void *__cdecl GetDFEngine(void)
@@ -355,6 +393,13 @@ extern "C" BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID)
     if (reason == DLL_PROCESS_ATTACH) {
         g_self = inst;
         DisableThreadLibraryCalls(inst);
+        early_init();
+    } else if (reason == DLL_PROCESS_DETACH) {
+        g_exiting = 1;
+#ifdef DXHRFIX_HOOKS
+        dxhrfix_hooks_report(1);
+#endif
+        dlog(1, "process detach");
     }
     return TRUE;
 }
