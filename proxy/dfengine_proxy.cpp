@@ -37,7 +37,7 @@
 
 #ifdef DXHRFIX_HOOKS
 #include "../src/dxhrfix_hooks.h"
-#define PROXY_VERSION "0.3.0-profiler"
+#define PROXY_VERSION "0.4.0-profiler"
 #define DEFAULT_HOOKS 1
 #define DEFAULT_PRECREATE 1
 #else
@@ -65,9 +65,12 @@ struct Config {
     int profiler_ring_ms;
     int profiler_extra_threads;
     int profiler_readfile;
+    int cursor_fix;
+    int cursor_refresh_ms;
 };
 static Config g_cfg = {DEFAULT_HOOKS, DEFAULT_PRECREATE, 2, 1, 1, 0, 0,
-                       DEFAULT_HOOKS, 250, 40, 200, 1000, 0, 1};
+                       DEFAULT_HOOKS, 250, 40, 200, 1000, 2, 1,
+                       1, 250};
 
 static wchar_t g_exeDir[MAX_PATH];
 static wchar_t g_dllDir[MAX_PATH];
@@ -165,6 +168,8 @@ static void load_config(void)
     g_cfg.profiler_ring_ms = ini_int(ini, L"profiler_ring_ms", g_cfg.profiler_ring_ms);
     g_cfg.profiler_extra_threads = ini_int(ini, L"profiler_extra_threads", g_cfg.profiler_extra_threads);
     g_cfg.profiler_readfile = ini_int(ini, L"profiler_readfile", g_cfg.profiler_readfile);
+    g_cfg.cursor_fix = ini_int(ini, L"cursor_fix", g_cfg.cursor_fix);
+    g_cfg.cursor_refresh_ms = ini_int(ini, L"cursor_refresh_ms", g_cfg.cursor_refresh_ms);
     if (g_cfg.frame_latency < 1) g_cfg.frame_latency = 1;
     if (g_cfg.frame_latency > 4) g_cfg.frame_latency = 4;
 }
@@ -382,6 +387,7 @@ static void early_init(void)
             "profiler_ring_ms=%d profiler_extra_threads=%d profiler_readfile=%d",
          g_cfg.profiler, g_cfg.profiler_hz, g_cfg.profiler_hitch_ms, g_cfg.profiler_max_dumps,
          g_cfg.profiler_ring_ms, g_cfg.profiler_extra_threads, g_cfg.profiler_readfile);
+    dlog(0, "config: cursor_fix=%d cursor_refresh_ms=%d", g_cfg.cursor_fix, g_cfg.cursor_refresh_ms);
     check_hook_sites(base);
 #ifdef DXHRFIX_HOOKS
     if (g_cfg.hooks) {
@@ -391,6 +397,8 @@ static void early_init(void)
         o.precreate = g_cfg.precreate;
         o.pool_threads = g_cfg.pool_threads;
         o.precreate_max_per_sec = g_cfg.precreate_max_per_sec;
+        o.cursor_fix = g_cfg.cursor_fix;
+        o.cursor_refresh_ms = g_cfg.cursor_refresh_ms;
         dxhrfix_hooks_install(base, &o, dlog);
     }
     else

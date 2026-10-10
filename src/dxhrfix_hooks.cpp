@@ -89,6 +89,7 @@ static fn0_t g_cancelTramp;
 static enqueue_fn g_stockEnqueue;
 static bool g_installed;
 static bool g_precreateOn;
+static bool g_cursorOn;
 
 static volatile LONG g_requests;      // request: enqueued through the serialized path
 static volatile LONG g_requestLost;   // request: requested flag already taken (cmpxchg lost)
@@ -424,6 +425,63 @@ bool replace_fn(const char *name, uint32_t va, const uint8_t *orig, size_t len,
     return true;
 }
 
+// Find the IAT slot of dll!func in the exe import directory.
+void **find_iat_slot(unsigned char *base, const char *dll, const char *func)
+{
+    IMAGE_DOS_HEADER *dos = (IMAGE_DOS_HEADER *)base;
+    IMAGE_NT_HEADERS *nt = (IMAGE_NT_HEADERS *)(base + dos->e_lfanew);
+    IMAGE_DATA_DIRECTORY dd = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+    if (!dd.VirtualAddress || !dd.Size)
+        return NULL;
+    IMAGE_IMPORT_DESCRIPTOR *d = (IMAGE_IMPORT_DESCRIPTOR *)(base + dd.VirtualAddress);
+    for (; d->Name; d++) {
+        if (_stricmp((const char *)(base + d->Name), dll) != 0)
+            continue;
+        if (!d->OriginalFirstThunk)
+            continue;
+        IMAGE_THUNK_DATA32 *names = (IMAGE_THUNK_DATA32 *)(base + d->OriginalFirstThunk);
+        IMAGE_THUNK_DATA32 *iat = (IMAGE_THUNK_DATA32 *)(base + d->FirstThunk);
+        for (int i = 0; names[i].u1.AddressOfData; i++) {
+            if (names[i].u1.Ordinal & IMAGE_ORDINAL_FLAG32)
+                continue;
+            IMAGE_IMPORT_BY_NAME *ibn = (IMAGE_IMPORT_BY_NAME *)(base + names[i].u1.AddressOfData);
+            if (strcmp((const char *)ibn->Name, func) == 0)
+                return (void **)&iat[i].u1.Function;
+        }
+    }
+    return NULL;
+}
+
+bool iat_hook(const char *dll, const char *func, uint32_t expectVa, void *detour, void **orig)
+{
+    void **slot = find_iat_slot(g_base, dll, func);
+    if (!slot) {
+        LOG(0, "iat %s!%s: import not found, SKIPPED", dll, func);
+        return false;
+    }
+    if ((unsigned char *)slot != rebase(expectVa))
+        LOG(0, "iat %s!%s: slot @%p, expected @%p (continuing)", dll, func, slot, rebase(expectVa));
+    HMODULE m = GetModuleHandleA(dll);
+    void *want = m ? (void *)GetProcAddress(m, func) : NULL;
+    void *cur = *slot;
+    if (!want || cur != want) {
+        LOG(0, "iat %s!%s @%p holds %p, %s!%s is %p: mismatch, SKIPPED", dll, func, slot, cur, dll,
+            func, want);
+        return false;
+    }
+    *orig = cur;
+    DWORD old;
+    if (!VirtualProtect(slot, 4, PAGE_READWRITE, &old)) {
+        LOG(0, "iat %s!%s: VirtualProtect failed, err %lu, SKIPPED", dll, func, GetLastError());
+        return false;
+    }
+    InterlockedExchange((volatile LONG *)slot, (LONG)(uintptr_t)detour);
+    DWORD tmp;
+    VirtualProtect(slot, 4, old, &tmp);
+    LOG(0, "iat %s!%s @%p patched %p -> %p", dll, func, slot, cur, detour);
+    return true;
+}
+
 static bool patch_latency(int latency)
 {
     char before[32], after[32];
@@ -502,6 +560,10 @@ int dxhrfix_hooks_install(unsigned char *base, const DxhrfixOptions *opt, dxhrfi
     }
     LOG(0, "hooks: %d patches applied (device manager ptr @%p = %p)", applied, g_dmPtr, *g_dmPtr);
     g_installed = applied > 0;
+    if (opt->cursor_fix)
+        g_cursorOn = cursor_install(opt) > 0;
+    else
+        LOG(0, "cursor: cursor_fix=0, not installed");
     return applied;
 }
 
@@ -531,14 +593,28 @@ int dxhrfix_hooks_format_precreate(char *buf, unsigned n)
     return precreate_format(buf, n);
 }
 
+int dxhrfix_hooks_format_cursor(char *buf, unsigned n)
+{
+    if (!n) return 0;
+    buf[0] = 0;
+    if (!g_cursorOn) return 0;
+    return cursor_format(buf, n);
+}
+
 void dxhrfix_hooks_report(void)
 {
-    if (!g_log || !g_installed) return;
+    if (!g_log || (!g_installed && !g_cursorOn)) return;
     char line[1024];
-    dxhrfix_hooks_format_totals(line, sizeof(line));
-    LOG(1, "%s", line);
+    if (g_installed) {
+        dxhrfix_hooks_format_totals(line, sizeof(line));
+        LOG(1, "%s", line);
+    }
     if (g_precreateOn) {
         precreate_format(line, sizeof(line));
+        LOG(1, "%s", line);
+    }
+    if (g_cursorOn) {
+        cursor_format(line, sizeof(line));
         LOG(1, "%s", line);
     }
 }
@@ -553,7 +629,7 @@ static DWORD WINAPI reporter_thread(LPVOID)
 
 void dxhrfix_hooks_start_threads(void)
 {
-    if (!g_installed) return;
+    if (!g_installed && !g_cursorOn) return;
     if (g_precreateOn)
         precreate_start_pool();
     if (g_logLevel < 1 || InterlockedExchange(&g_reporterStarted, 1)) return;

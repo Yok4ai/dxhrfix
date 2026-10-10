@@ -21,6 +21,8 @@ struct DxhrfixOptions {
     int precreate;              /* 1 = Hook B on */
     int pool_threads;           /* 0 = auto: min(4, cores - 2), at least 1 */
     int precreate_max_per_sec;  /* 0 = unlimited */
+    int cursor_fix;             /* 1 = dedupe ShowCursor / SetCursor / ClipCursor */
+    int cursor_refresh_ms;      /* SetCursor / ClipCursor: repeat a real call at least this often */
 };
 
 /* base = GetModuleHandle(NULL). Returns the number of patches applied. */
@@ -38,6 +40,7 @@ void dxhrfix_hooks_report(void);
  * (empty string when the hooks are not installed). Return the length. */
 int dxhrfix_hooks_format_totals(char *buf, unsigned n);
 int dxhrfix_hooks_format_precreate(char *buf, unsigned n);
+int dxhrfix_hooks_format_cursor(char *buf, unsigned n);
 
 /* Hitch profiler (src/dxhrfix_profiler.cpp). Independent of hooks=. */
 struct DxhrfixProfilerOptions {

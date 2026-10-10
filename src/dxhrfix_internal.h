@@ -73,6 +73,15 @@ bool replace_fn(const char *name, uint32_t va, const uint8_t *orig, size_t len,
  * request), so a shader created by another thread is never clobbered. */
 int request_impl(AsyncItem *item, uint32_t arg, bool zero_d3d);
 
+/* IAT helpers (dxhrfix_hooks.cpp). iat_hook verifies that the exe's slot for
+ * dll!func holds GetProcAddress(dll, func) before pointing it at detour. */
+void **find_iat_slot(unsigned char *base, const char *dll, const char *func);
+bool iat_hook(const char *dll, const char *func, uint32_t expectVa, void *detour, void **orig);
+
+/* Cursor call dedupe (dxhrfix_cursor.cpp). */
+int cursor_install(const DxhrfixOptions *o);
+int cursor_format(char *buf, size_t n);
+
 /* Hook B (dxhrfix_precreate.cpp). */
 int precreate_install(const DxhrfixOptions *o);
 void precreate_start_pool(void);
