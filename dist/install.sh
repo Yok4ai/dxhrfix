@@ -55,4 +55,9 @@ else
     cp "$HERE/dxhrfix.ini" "$GAME/dxhrfix.ini" || die "copy failed"
 fi
 
-echo "done. Start the game, then check $GAME/dxhrfix.log"
+if [ -f "$HERE/dxhrfix_syms.tsv" ]; then
+    echo "step 6: copying dxhrfix_syms.tsv (profiler symbol names) into the game folder"
+    cp "$HERE/dxhrfix_syms.tsv" "$GAME/dxhrfix_syms.tsv" || die "copy failed"
+fi
+
+echo "done. Start the game, then check $GAME/dxhrfix.log (and dxhrfix_hitch.log for slow frames)"

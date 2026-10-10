@@ -76,6 +76,7 @@ int request_impl(AsyncItem *item, uint32_t arg, bool zero_d3d);
 /* Hook B (dxhrfix_precreate.cpp). */
 int precreate_install(const DxhrfixOptions *o);
 void precreate_start_pool(void);
-void precreate_report(void);
+/* Format the precreate totals line (takes the list CS). Returns length. */
+int precreate_format(char *buf, size_t n);
 
 #endif

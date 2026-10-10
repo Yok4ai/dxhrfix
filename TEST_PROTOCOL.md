@@ -67,12 +67,34 @@ grep -E "FAILED|SKIPPED|mismatch|still waiting" "$G/dxhrfix.log"
 grep -E "^.{12} \[[0-9]+\] (totals|precreate):" "$G/dxhrfix.log" | tail -2
 ```
 
+## 5b. Read dxhrfix_hitch.log (hitch profiler)
+
+This build carries the hitch profiler (on by default, `profiler=1`). Install with `./install.sh` so `dxhrfix_syms.tsv` lands next to `DFEngine.dll`. After the run, the reports are in the game folder: `dxhrfix_hitch.log`.
+
+1. In `dxhrfix.log`, check the profiler lines: `hook present ... installed`, `profiler: tracking thread ... as main`, `... as render`, `... as async_create`, `... as fs_worker`, `profiler: sampler running at 250 Hz`, and the 10 s `profiler: ticks ...` lines (`fail` counts should stay 0; `dumps ... dropped` should be 0).
+2. List the slow frames:
+
+```
+grep "^==================== hitch" "$G/dxhrfix_hitch.log"
+```
+
+3. For each of the ~10 frames of 100 ms or more, read its block (see the README, "Reading dxhrfix_hitch.log"):
+   - **render** thread, leaf functions: if most samples sit in `ntdll.dll!NtWaitFor*` / `RtlWaitOnAddress` / `SleepConditionVariableSRW`, the render thread was blocked. The return addresses tell on what: game call sites like `renderThreadProc+0x34` (waiting for the main thread to hand over a frame) or a game function calling into `d3d11.dll` (DXVK: a D3D11 call that blocked inside the driver, for example a resource Map or a pipeline compile).
+   - **main** thread: if render waited in `renderThreadProc`, the main thread is the one that was slow. Its leaf functions and top stacks show where (game logic, streaming, `DFEngine_orig.dll` ad SDK network calls, ReadFile, allocation).
+   - **async_create** / **fs_worker**: busy or idle during the slow frame.
+   - **ReadFile** section: large byte counts or long times on the main thread point to synchronous loading.
+   - The `totals:` / `precreate:` lines show whether shader creation was active around that frame (compare with the previous report).
+4. Please send `dxhrfix_hitch.log` and `dxhrfix.log` with the MangoHud CSV.
+
+The profiler costs a little frame time (each tracked thread is suspended about 5% of the time at 250 Hz). For a clean A/B of frame times, run once more with `profiler=0` in `dxhrfix.ini`.
+
 ## 6. Variants (optional)
 
 Edit `dxhrfix.ini` in the game folder, then repeat steps 3 to 5:
 - `precreate=0`: Hook A only.
 - `frame_latency=1`: stock latency.
-- `hooks=0`: everything stock except the DLL swap.
+- `hooks=0`: everything stock except the DLL swap (the profiler still runs unless `profiler=0`, which gives a profile of the stock game).
+- `profiler=0`: no profiler at all.
 
 ## 7. Revert
 

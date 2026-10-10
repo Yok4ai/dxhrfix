@@ -33,6 +33,7 @@
 #include "dxhrfix_internal.h"
 #include "../hooklib/hooklib.h"
 
+#include <stdio.h>
 #include <string.h>
 
 // ---------------------------------------------------------------- engine layout
@@ -504,18 +505,42 @@ int dxhrfix_hooks_install(unsigned char *base, const DxhrfixOptions *opt, dxhrfi
     return applied;
 }
 
-void dxhrfix_hooks_report(void)
+int dxhrfix_hooks_format_totals(char *buf, unsigned n)
 {
-    if (!g_log || !g_installed) return;
-    LOG(1, "totals: requests %ld (lost %ld), inline %ld (late %ld), fallback %ld, await_noop %ld, "
-           "dtor_cancel %ld, dtor_wait %ld, dtor_noop %ld, no_dm %ld, max_wait %ld.%03ld ms, "
-           "max_inline_create %ld.%03ld ms",
+    if (!n) return 0;
+    buf[0] = 0;
+    if (!g_installed) return 0;
+    int k = _snprintf(buf, n - 1,
+        "totals: requests %ld (lost %ld), inline %ld (late %ld), fallback %ld, await_noop %ld, "
+        "dtor_cancel %ld, dtor_wait %ld, dtor_noop %ld, no_dm %ld, max_wait %ld.%03ld ms, "
+        "max_inline_create %ld.%03ld ms",
         (long)g_requests, (long)g_requestLost, (long)g_inline, (long)g_inlineLate,
         (long)g_fallback, (long)g_awaitNoop, (long)g_cancelled, (long)g_dtorWaits,
         (long)g_dtorNoop, (long)g_noDm, (long)(g_maxWaitUs / 1000), (long)(g_maxWaitUs % 1000),
         (long)(g_maxCreateUs / 1000), (long)(g_maxCreateUs % 1000));
-    if (g_precreateOn)
-        precreate_report();
+    if (k < 0) k = (int)n - 1;
+    buf[k] = 0;
+    return k;
+}
+
+int dxhrfix_hooks_format_precreate(char *buf, unsigned n)
+{
+    if (!n) return 0;
+    buf[0] = 0;
+    if (!g_installed || !g_precreateOn) return 0;
+    return precreate_format(buf, n);
+}
+
+void dxhrfix_hooks_report(void)
+{
+    if (!g_log || !g_installed) return;
+    char line[1024];
+    dxhrfix_hooks_format_totals(line, sizeof(line));
+    LOG(1, "%s", line);
+    if (g_precreateOn) {
+        precreate_format(line, sizeof(line));
+        LOG(1, "%s", line);
+    }
 }
 
 static DWORD WINAPI reporter_thread(LPVOID)

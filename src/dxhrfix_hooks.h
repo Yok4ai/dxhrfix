@@ -34,4 +34,33 @@ void dxhrfix_hooks_start_threads(void);
 /* Log the counters (level 1). Not safe from DLL_PROCESS_DETACH. */
 void dxhrfix_hooks_report(void);
 
+/* The totals / precreate lines the reporter logs, formatted into buf
+ * (empty string when the hooks are not installed). Return the length. */
+int dxhrfix_hooks_format_totals(char *buf, unsigned n);
+int dxhrfix_hooks_format_precreate(char *buf, unsigned n);
+
+/* Hitch profiler (src/dxhrfix_profiler.cpp). Independent of hooks=. */
+struct DxhrfixProfilerOptions {
+    int hz;                     /* samples per second per thread, 50..4000 */
+    int hitch_ms;               /* frame time that triggers a dump */
+    int max_dumps;              /* dumps per process */
+    int ring_ms;                /* sample history kept, 100..4000 */
+    int extra_threads;          /* 1 = also sample the other exe-created threads */
+    int readfile;               /* 1 = count ReadFile calls (exe IAT hook) */
+    int log_level;
+    const wchar_t *out_dir;     /* dxhrfix_hitch.log goes here */
+    const wchar_t *dll_dir;     /* dxhrfix_syms.tsv is read from here */
+};
+
+/* DllMain PROCESS_ATTACH, single-threaded, before the game threads exist:
+ * records the main thread id, installs the Present hook (0x54C9F0) and the
+ * ReadFile IAT hook. Creates no threads. Returns the patches applied; 0
+ * means the profiler stays off. */
+int dxhrfix_profiler_install(unsigned char *base, const DxhrfixProfilerOptions *opt,
+                             dxhrfix_log_fn log);
+
+/* Outside DllMain (first GetDFEngine): load symbols, open the hitch log,
+ * start the sampler and writer threads. No-op when install failed. */
+void dxhrfix_profiler_start(void);
+
 #endif

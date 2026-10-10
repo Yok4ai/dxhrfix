@@ -37,7 +37,7 @@
 
 #ifdef DXHRFIX_HOOKS
 #include "../src/dxhrfix_hooks.h"
-#define PROXY_VERSION "0.2.0-hookA"
+#define PROXY_VERSION "0.3.0-profiler"
 #define DEFAULT_HOOKS 1
 #define DEFAULT_PRECREATE 1
 #else
@@ -58,10 +58,19 @@ struct Config {
     int ad_sdk; // 1 = forward to DFEngine_orig.dll when present, 0 = always stub
     int pool_threads;          // 0 = auto
     int precreate_max_per_sec; // 0 = unlimited
+    int profiler;              // hitch profiler (top-level build only)
+    int profiler_hz;
+    int profiler_hitch_ms;
+    int profiler_max_dumps;
+    int profiler_ring_ms;
+    int profiler_extra_threads;
+    int profiler_readfile;
 };
-static Config g_cfg = {DEFAULT_HOOKS, DEFAULT_PRECREATE, 2, 1, 1, 0, 0};
+static Config g_cfg = {DEFAULT_HOOKS, DEFAULT_PRECREATE, 2, 1, 1, 0, 0,
+                       DEFAULT_HOOKS, 250, 40, 200, 1000, 0, 1};
 
 static wchar_t g_exeDir[MAX_PATH];
+static wchar_t g_dllDir[MAX_PATH];
 static wchar_t g_exePath[MAX_PATH];
 static HANDLE g_log = INVALID_HANDLE_VALUE;
 static CRITICAL_SECTION g_logLock;
@@ -149,6 +158,13 @@ static void load_config(void)
     g_cfg.ad_sdk = ini_int(ini, L"ad_sdk", g_cfg.ad_sdk);
     g_cfg.pool_threads = ini_int(ini, L"pool_threads", g_cfg.pool_threads);
     g_cfg.precreate_max_per_sec = ini_int(ini, L"precreate_max_per_sec", g_cfg.precreate_max_per_sec);
+    g_cfg.profiler = ini_int(ini, L"profiler", g_cfg.profiler);
+    g_cfg.profiler_hz = ini_int(ini, L"profiler_hz", g_cfg.profiler_hz);
+    g_cfg.profiler_hitch_ms = ini_int(ini, L"profiler_hitch_ms", g_cfg.profiler_hitch_ms);
+    g_cfg.profiler_max_dumps = ini_int(ini, L"profiler_max_dumps", g_cfg.profiler_max_dumps);
+    g_cfg.profiler_ring_ms = ini_int(ini, L"profiler_ring_ms", g_cfg.profiler_ring_ms);
+    g_cfg.profiler_extra_threads = ini_int(ini, L"profiler_extra_threads", g_cfg.profiler_extra_threads);
+    g_cfg.profiler_readfile = ini_int(ini, L"profiler_readfile", g_cfg.profiler_readfile);
     if (g_cfg.frame_latency < 1) g_cfg.frame_latency = 1;
     if (g_cfg.frame_latency > 4) g_cfg.frame_latency = 4;
 }
@@ -347,6 +363,13 @@ static void early_init(void)
         wchar_t *s = wcsrchr(g_exeDir, L'\\');
         if (s) *s = 0;
     }
+    n = GetModuleFileNameW(g_self, g_dllDir, MAX_PATH);
+    if (n == 0 || n >= MAX_PATH) {
+        wcscpy(g_dllDir, g_exeDir);
+    } else {
+        wchar_t *s = wcsrchr(g_dllDir, L'\\');
+        if (s) *s = 0;
+    }
     load_config();
     init_log();
     unsigned char *base = (unsigned char *)GetModuleHandleW(NULL);
@@ -355,6 +378,10 @@ static void early_init(void)
             "pool_threads=%d precreate_max_per_sec=%d",
          g_cfg.hooks, g_cfg.precreate, g_cfg.frame_latency, g_cfg.log_level, g_cfg.ad_sdk,
          g_cfg.pool_threads, g_cfg.precreate_max_per_sec);
+    dlog(0, "config: profiler=%d profiler_hz=%d profiler_hitch_ms=%d profiler_max_dumps=%d "
+            "profiler_ring_ms=%d profiler_extra_threads=%d profiler_readfile=%d",
+         g_cfg.profiler, g_cfg.profiler_hz, g_cfg.profiler_hitch_ms, g_cfg.profiler_max_dumps,
+         g_cfg.profiler_ring_ms, g_cfg.profiler_extra_threads, g_cfg.profiler_readfile);
     check_hook_sites(base);
 #ifdef DXHRFIX_HOOKS
     if (g_cfg.hooks) {
@@ -367,7 +394,23 @@ static void early_init(void)
         dxhrfix_hooks_install(base, &o, dlog);
     }
     else
-        dlog(0, "hooks=0: stock behavior, nothing patched");
+        dlog(0, "hooks=0: stock behavior, no fix patches");
+    // The profiler is independent of hooks= so a stock run can be profiled.
+    if (g_cfg.profiler) {
+        DxhrfixProfilerOptions po;
+        po.hz = g_cfg.profiler_hz;
+        po.hitch_ms = g_cfg.profiler_hitch_ms;
+        po.max_dumps = g_cfg.profiler_max_dumps;
+        po.ring_ms = g_cfg.profiler_ring_ms;
+        po.extra_threads = g_cfg.profiler_extra_threads;
+        po.readfile = g_cfg.profiler_readfile;
+        po.log_level = g_cfg.log_level;
+        po.out_dir = g_exeDir;
+        po.dll_dir = g_dllDir;
+        dxhrfix_profiler_install(base, &po, dlog);
+    } else {
+        dlog(0, "profiler=0: profiler off");
+    }
 #else
     dlog(0, "stage 1 build: patching nothing");
 #endif
@@ -383,6 +426,8 @@ static void do_init(void)
 #ifdef DXHRFIX_HOOKS
     if (g_cfg.hooks)
         dxhrfix_hooks_start_threads();
+    if (g_cfg.profiler)
+        dxhrfix_profiler_start();
 #endif
 }
 

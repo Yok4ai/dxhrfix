@@ -39,6 +39,7 @@
 #include "dxhrfix_internal.h"
 #include "../hooklib/hooklib.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -460,19 +461,24 @@ int precreate_install(const DxhrfixOptions *o)
     return applied;
 }
 
-void precreate_report(void)
+int precreate_format(char *buf, size_t n)
 {
+    if (!n) return 0;
     LONG queued = 0;
     EnterCriticalSection(&g_listCs);
     for (LONG i = g_head; i < g_tail; i++)
         queued += g_list[i].item != NULL;
     LeaveCriticalSection(&g_listCs);
-    LOG(1, "precreate: libs %ld (listed %ld, relisted skipped %ld), shaders listed %ld (dup skipped %ld), created %ld, lost %ld (already created %ld), "
-           "skipped_unload %ld, cleared %ld, queued %ld, in_flight %ld, no_device_waits %ld, "
-           "create_total %ld.%03ld ms, max_create %ld.%03ld ms",
+    int k = _snprintf(buf, n - 1,
+        "precreate: libs %ld (listed %ld, relisted skipped %ld), shaders listed %ld (dup skipped %ld), created %ld, lost %ld (already created %ld), "
+        "skipped_unload %ld, cleared %ld, queued %ld, in_flight %ld, no_device_waits %ld, "
+        "create_total %ld.%03ld ms, max_create %ld.%03ld ms",
         (long)g_libs, (long)g_libsListed, (long)g_tablesRelisted, (long)g_listed,
         (long)g_dupSkipped, (long)g_created, (long)g_lost, (long)g_lostDone,
         (long)g_skipped, (long)g_cleared, (long)queued, (long)g_inFlight, (long)g_waitNoDevice,
         (long)(g_createUsTotal / 1000), (long)(g_createUsTotal % 1000),
         (long)(g_maxCreateUs / 1000), (long)(g_maxCreateUs % 1000));
+    if (k < 0) k = (int)n - 1;
+    buf[k] = 0;
+    return k;
 }
