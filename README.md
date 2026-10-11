@@ -31,7 +31,7 @@ It ships as a replacement for `DFEngine.dll`, a DLL the game already loads at st
 
 ## Install
 
-1. Download `dxhrfix-0.4.0.zip` from the releases page.
+1. Download `dxhrfix-0.4.0.zip` from the [releases page](https://github.com/Yok4ai/dxhrfix/releases).
 2. Extract the zip. You get a folder named `dxhrfix-<version>`. Put that folder inside the game folder (the one with `DXHRDC.exe`), or anywhere else. Do not extract the files loose into the game folder: that would overwrite the original `DFEngine.dll` before it can be backed up.
 3. Run the installer with the game not running.
 
