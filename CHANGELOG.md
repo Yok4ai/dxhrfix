@@ -11,7 +11,7 @@ First public release.
 - Profiler: samples every thread in the process (`profiler_extra_threads=2`, up to 16 threads, including DXVK's), names threads by description and start address, and for threads inside a Wine syscall shows the native (Linux side) instruction and stack as `file+offset`. Each report starts with a per thread summary table.
 - The profiler is now off unless `profiler=1` is set, also when an older `dxhrfix.ini` lacks the key.
 - Installers: take the game folder from the argument, the script folder or its parent; warn (and ask) on an unknown `DXHRDC.exe` instead of refusing; update an existing dxhrfix install in place; never overwrite `dxhrfix.ini`; never delete anything.
-- Repository: MIT license, README, build and test without machine specific paths.
+- Repository: MIT license, README, build and test without machine specific paths, `tools/frametime_stats.py` and `tools/frametime_chart.py` for MangoHud logs, `make release` to build the zip.
 
 ## 0.3.0
 

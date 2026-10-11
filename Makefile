@@ -21,9 +21,16 @@ test: dist/DFEngine.dll
 harness: dist/DFEngine.dll
 	dev/harness/test_launch.sh dist/DFEngine.dll 60
 
+VERSION := 0.4.0
+release: dist/DFEngine.dll
+	rm -rf build/release && mkdir -p build/release/dxhrfix-$(VERSION)
+	cp dist/DFEngine.dll dist/dxhrfix.ini dist/dxhrfix_syms.tsv dist/install.sh dist/install.bat dist/revert.sh dist/revert.bat dist/README.md build/release/dxhrfix-$(VERSION)/
+	cd build/release && rm -f dxhrfix-$(VERSION).zip && zip -r -X dxhrfix-$(VERSION).zip dxhrfix-$(VERSION)
+	@echo built build/release/dxhrfix-$(VERSION).zip
+
 clean:
 	rm -rf build
 	$(MAKE) -C hooklib clean
 	$(MAKE) -C src/test clean
 
-.PHONY: all test harness clean
+.PHONY: all test harness release clean

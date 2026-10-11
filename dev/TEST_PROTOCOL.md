@@ -4,7 +4,7 @@ Developer notes for measuring a build on Linux/Proton. Placeholders used below:
 
 - `$REPO`: this repository.
 - `$GAME`: the game folder (the one with `DXHRDC.exe`), for example `~/.local/share/Steam/steamapps/common/Deus Ex Human Revolution Director's Cut`.
-- `$WORK`: a work folder of your choice for the MangoHud config, the frame time CSVs and the analysis script. The MangoHud config and `analyze_mangohud.py` used during development are not part of this repository; any frame time CSV analysis that counts hitches and high percentiles works.
+- `$WORK`: a work folder of your choice for the MangoHud config and the frame time CSVs. The analysis scripts are `tools/frametime_stats.py` (table) and `tools/frametime_chart.py` (chart) in this repository.
 
 ## 1. Install
 
@@ -43,13 +43,15 @@ ls -t $WORK/logs/DXHRDC_*.csv | head -1
 ## 4. Compare
 
 ```
-python3 -I $WORK/analyze_mangohud.py \
-  A=$WORK/logs/<stock run csv> \
-  E=<cold cache stock run csv> \
-  F=<new csv>
+python3 -I $REPO/tools/frametime_stats.py \
+  "stock warm"=$WORK/logs/<stock run csv> \
+  "stock cold"=<cold cache stock run csv> \
+  "new build"=<new csv>
+python3 -I $REPO/tools/frametime_chart.py $WORK/frametimes.png \
+  "stock warm"=$WORK/logs/<stock run csv> "new build"=<new csv>
 ```
 
-A and E are earlier stock reference runs and F is this build. Look at the hitch counts and the high-percentile frametimes (p99 and the worst frames). Average fps matters less.
+The first two are stock reference runs and the third is this build. The scripts skip the first 20 s of each log (load-in, pipeline compiles on every build). Look at frames over 50 ms per minute, frames over 100 ms and the worst frame. Average fps matters less.
 
 ## 5. Read dxhrfix.log
 

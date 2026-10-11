@@ -1,10 +1,10 @@
 # dxhrfix 0.4.0
 
-A stutter fix for **Deus Ex: Human Revolution Director's Cut** (Steam). It replaces the game's `DFEngine.dll`, the DLL of a long dead in-game advertising SDK, with a small DLL that patches the game in memory when it starts. No game file on disk is modified except that DLL, and the original is kept as `DFEngine_orig.dll`.
+A stutter fix for **Deus Ex: Human Revolution Director's Cut** (Steam). It replaces the game's `DFEngine.dll`, the DLL of a defunct in-game advertising SDK, with a small DLL that patches the game in memory when it starts. No game file on disk is modified except that DLL, and the original is kept as `DFEngine_orig.dll`.
 
-Supported: only the Steam `DXHRDC.exe` with sha256 `8266b6b4a5bf25f2f4e8de068aa3720f6289c962bb1c2bb70a7b1c111ba510a1`. Every patch checks the game's bytes before writing; a site that does not match is skipped and logged, and that part of the game runs stock.
+Supported: the Steam `DXHRDC.exe` with sha256 `8266b6b4a5bf25f2f4e8de068aa3720f6289c962bb1c2bb70a7b1c111ba510a1`. Every patch checks the game's bytes before writing. A site that does not match is skipped and logged, and that part of the game runs stock.
 
-Tested on Linux with Proton 11 (DXVK). Windows is untested: the DLL is plain Win32 and handles ASLR, but nobody has run it there yet. Reports welcome.
+Tested on Linux with Proton 11 (DXVK, NVIDIA). Windows is untested: the DLL is plain Win32 and handles ASLR, but nobody has run it there yet. Reports are welcome either way.
 
 ## Files
 
@@ -18,18 +18,20 @@ Tested on Linux with Proton 11 (DXVK). Windows is untested: the DLL is plain Win
 
 ## Install
 
-Close the game first. Extract the `dxhrfix-0.4.0` folder anywhere; inside the game folder is easiest (giving `...\Deus Ex Human Revolution Director's Cut\dxhrfix-0.4.0\`). Do not extract the files straight into the game folder: that would overwrite the original `DFEngine.dll` before it can be backed up.
+1. Extract the zip. Put the `dxhrfix-<version>` folder inside the game folder (the one with `DXHRDC.exe`), or anywhere else. Do not extract the files loose into the game folder: that would overwrite the original `DFEngine.dll` before it can be backed up.
+2. Run the installer with the game not running.
 
-**Linux (Steam with Proton):**
+Linux (Steam with Proton): open a terminal in the extracted `dxhrfix-<version>` folder and run
 
 ```
-cd "/path/to/Deus Ex Human Revolution Director's Cut/dxhrfix-0.4.0"
 ./install.sh
 ```
 
-or from anywhere: `./install.sh "/path/to/Deus Ex Human Revolution Director's Cut"`. The default Steam library is `~/.local/share/Steam/steamapps/common/`. No launch options are needed: the game loads `DFEngine.dll` from its own folder.
+The installer finds `DXHRDC.exe` in the parent folder on its own. If you extracted the folder somewhere else, pass the game folder as the argument: `./install.sh "/path/to/Deus Ex Human Revolution Director's Cut"`. Steam > Properties > Installed Files > Browse shows where that is.
 
-**Windows:** double click `install.bat` inside the extracted folder (when that folder is inside the game folder), or run `install.bat "C:\path\to\Deus Ex Human Revolution Director's Cut"` from a command prompt.
+Windows: double click `install.bat` inside the extracted folder (when that folder is inside the game folder), or run `install.bat "C:\path\to\Deus Ex Human Revolution Director's Cut"` from a command prompt.
+
+No launch options are needed. The game loads `DFEngine.dll` from its own folder.
 
 The installer:
 - checks `DXHRDC.exe`; if it is not the supported build it explains and asks before continuing;
@@ -41,21 +43,25 @@ The installer:
 
 To update to a newer dxhrfix, run the new installer the same way.
 
+## Confirm it is active
+
+Start the game once. `dxhrfix.log` in the game folder should contain `hooks: 10 patches applied` and no `FAILED`, `SKIPPED` or `mismatch` lines. The full log format is described below under "How to confirm it loaded".
+
 ## Revert
 
 - `./revert.sh` or `revert.bat` (same folder rules as the installer) copies `DFEngine_orig.dll` back over `DFEngine.dll`, nothing else.
 - Or Steam > Properties > Installed Files > Verify integrity of game files, which restores the stock `DFEngine.dll`.
 
-The leftover `DFEngine_orig.dll`, `dxhrfix.ini`, `dxhrfix_syms.tsv` and logs are ignored by the stock DLL; delete them by hand if you like.
+The leftover `DFEngine_orig.dll`, `dxhrfix.ini`, `dxhrfix_syms.tsv` and logs are ignored by the stock DLL and can be deleted.
 
 ## What it changes
 
-- **Resource creation without waiting.** The engine creates every shader, texture and constant buffer on one background thread, one at a time. When the render thread needs one that is still queued, stock code sleeps in 1 ms steps until the worker gets to it (on Windows each step can take up to 15.6 ms, because the game never raises the timer resolution). dxhrfix takes the item out of the queue and creates it right there instead; the D3D11 device is free threaded, so this is legal.
+- **Resource creation without waiting.** The engine creates every shader, texture and constant buffer on one background thread, one at a time. When the render thread needs one that is still queued, stock code sleeps in 1 ms steps until the worker gets to it (on Windows each step can take up to 15.6 ms, because the game never raises the timer resolution). dxhrfix takes the item out of the queue and creates it on the waiting thread instead; the D3D11 device is free threaded, so this is allowed.
 - **Queue race fix.** Stock code publishes a queue slot outside the lock the worker reads it under, so the worker can see a half written slot. dxhrfix publishes it in order under the engine's own lock.
-- **Shader precreate.** Pixel shaders are created lazily at first draw, which on DXVK means a pipeline compile in the middle of a frame. When a shader library loads, dxhrfix creates its pixel shaders on a small thread pool ahead of time.
+- **Shader precreate.** Pixel shaders are created at first draw, which on DXVK means a pipeline compile in the middle of a frame. When a shader library loads, dxhrfix creates its pixel shaders on a small thread pool ahead of time.
 - **Frame latency 2.** The game hardcodes `SetMaximumFrameLatency(1)`; 2 smooths pacing when the GPU or shader compiler hiccups.
-- **Cursor call dedupe.** The UI calls `ShowCursor`, `SetCursor` and `ClipCursor` every frame, and its show loop pushes the cursor counter up by one every visible frame. Under Wine each call is a round trip to the wineserver; one profiled 113 ms frame spent 78% of its time there. Only real changes are passed on now.
-- **Ad SDK off** (`ad_sdk=0`). The ad network is gone and its SDK blocked the main thread on network calls. The game handles a missing ad SDK on its own.
+- **Cursor call dedupe.** The UI calls `ShowCursor`, `SetCursor` and `ClipCursor` every frame, and its show loop raises the cursor counter by one every visible frame. Under Wine each call is a round trip to the wineserver; one profiled 113 ms frame spent 78% of its time there. Only real changes are passed on now.
+- **Ad SDK off** (`ad_sdk=0`). The ad network no longer exists and its SDK blocked the main thread on network calls. The game handles a missing ad SDK on its own.
 
 ## Settings (dxhrfix.ini, section [dxhrfix])
 
