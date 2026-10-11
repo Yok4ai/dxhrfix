@@ -1,6 +1,6 @@
 # Vertex shader precreate (Hook B for VS)
 
-Target: DXHRDC.exe stock sha256 `8266b6b4a5bf25f2f4e8de068aa3720f6289c962bb1c2bb70a7b1c111ba510a1`. All addresses are VAs (image base 0x400000, runtime = module base + RVA). Prologue bytes below were read from the exe file and match `binary/out/DXHRDC.objdump.txt`. Decompiles: `binary/out/decomp_vs_tables.c`. Layout additions: `spec/engine_more.h`. Tags as in SPEC.md: **[V]** verified in disassembly, **[R]** RTTI or reconstruction consistent with disassembly, **[?]** inferred.
+Target: DXHRDC.exe stock sha256 `8266b6b4a5bf25f2f4e8de068aa3720f6289c962bb1c2bb70a7b1c111ba510a1`. All addresses are VAs (image base 0x400000, runtime = module base + RVA). Prologue bytes below were read from the exe file and match an objdump listing of the exe. Decompiles: `decomp_vs_tables.c` (local analysis output, not distributed; regenerate with `tools/ghidra`). Layout additions: `spec/engine_more.h`. Tags as in SPEC.md: **[V]** verified in disassembly, **[R]** RTTI or reconstruction consistent with disassembly, **[?]** inferred.
 
 ## 0. Answer in one paragraph
 

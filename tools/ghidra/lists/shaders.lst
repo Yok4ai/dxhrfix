@@ -1,0 +1,25 @@
+553590	PCDX11VertexShader ctor
+553600	VS asyncCreate vfunc
+553640	~PCDX11VertexShader scalar deleting
+553690	VS internalCreate (self request)
+5535f0	shader requestShader
+54c7b0	internalCreateIfAllowed
+54ece0	PCDX11VertexShaderTable ctor
+54edd0	~PCDX11VertexShaderTable
+54e810	VS table destroy shaders
+54e640	ShaderManager release VS
+54e5f0	ShaderManager createVS
+54e040	ShaderManager findOrCreate VS
+54e130	shader unref
+546ea0	PCDX11ShaderLib ctor
+547020	ShaderLib fill
+546e40	~ShaderLib
+54ea60	VS table registry remove
+54f9c0	StateManager setVertexShader
+552ca0	StreamDecl internalCreate CreateInputLayout
+552e60	StreamDecl ctor
+552c10	StreamDecl dtor body
+552f00	StreamDecl internalRelease
+553080	StreamDeclCache build A
+553190	StreamDeclCache build B
+552b20	StreamDecl element builder

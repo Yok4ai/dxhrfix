@@ -1,0 +1,27 @@
+553590	PCDX11VertexShader ctor (blob, takeCopy, isWrapped) ret 0xC; requests at construction via 0x54C7B0
+553600	PCDX11VertexShader asyncCreate vfunc (worker): ID3D11Device::CreateVertexShader
+553640	~PCDX11VertexShader scalar deleting dtor (thiscall this, flags) ret 4
+553690	VS InternalResource vtbl[1] internalCreate: d3d=0; request(0)
+5535f0	PS/VS requestShader (shared, identical code folding)
+54c7b0	internalCreateIfAllowed: if (!dm->byte[0x30]) jmp vtbl[1]
+54ece0	PCDX11VertexShaderTable ctor (blob, takeCopy, flag) ret 0xC
+54edd0	~PCDX11VertexShaderTable scalar deleting dtor
+54e810	VS table destroyShaders: releaseVS for each slot
+54e640	ShaderManager::releaseVertexShader
+54e5f0	ShaderManager::createVertexShader
+54e040	ShaderManager findOrCreate VS (dedup by 64 bit hash, buckets +0x444)
+54e130	shader unref (refCount--, delete at 0)
+54ea60	renderDevice VS table registry remove (+0x11131C)
+54dd90	ShaderBinary ctor
+546ea0	PCDX11ShaderLib ctor (blob, type, renderDevice): type 2 = VS table
+547020	PCDX11ShaderLib fill (streamed): buffer[0] 0 = VS table
+5aa0a0	ShaderLibSection receiveData dispatch -> lib->vtbl[1] fill
+54f9c0	PCDX11StateManager::setVertexShader (render thread)
+552e60	PCDX11StreamDecl ctor: internalCreate immediately (CreateInputLayout)
+552ca0	PCDX11StreamDecl internalCreate: ID3D11Device::CreateInputLayout (vtbl +0x2C)
+552f00	PCDX11StreamDecl internalRelease
+552c10	PCDX11StreamDecl dtor body
+553080	StreamDeclCache build A (lazy, keyed)
+553190	StreamDeclCache build B (lazy, keyed by layout hash and VS signature)
+541090	PCDX11ModelDrawable vtbl[0] draw: setVS + StreamDecl build (render thread)
+549cd0	InternalResource vtbl[2] internalRelease: COM Release of subobject+0xC

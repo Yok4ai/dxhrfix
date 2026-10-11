@@ -1,6 +1,6 @@
 # Streaming, loading and frame stalls
 
-Target: DXHRDC.exe stock sha256 `8266b6b4a5bf25f2f4e8de068aa3720f6289c962bb1c2bb70a7b1c111ba510a1`. VAs, image base 0x400000. Byte strings were read from the exe file. Decompiles: `binary/out/decomp_streaming.c`, `binary/out/decomp_hitch_candidates.c`. Tags: **[V]** verified in disassembly, **[R]** RTTI or reconstruction consistent with disassembly, **[?]** inferred. `rd` = PCDX11RenderDevice (`*(0xEAAB48) - 0x10`), `dm` = deviceManager (`*0x12AB940`).
+Target: DXHRDC.exe stock sha256 `8266b6b4a5bf25f2f4e8de068aa3720f6289c962bb1c2bb70a7b1c111ba510a1`. VAs, image base 0x400000. Byte strings were read from the exe file. Decompiles: `decomp_streaming.c`, `decomp_hitch_candidates.c` (local analysis output, not distributed; regenerate with `tools/ghidra`). Tags: **[V]** verified in disassembly, **[R]** RTTI or reconstruction consistent with disassembly, **[?]** inferred. `rd` = PCDX11RenderDevice (`*(0xEAAB48) - 0x10`), `dm` = deviceManager (`*0x12AB940`).
 
 ## 0. Short answers
 
@@ -187,7 +187,7 @@ So any render frame longer than the main frame stretches the main frame in EndFr
 
 ## 9. Sleep and wait sites (Q3)
 
-Full list with bytes, thread, timeout and reachability: `binary/out/decomp_hitch_candidates.c` header. Per-frame relevant ones:
+Full list with bytes, thread, timeout and reachability: `decomp_hitch_candidates.c` header (local analysis output, not distributed; regenerate with `tools/ghidra`); `tools/ghidra/lists/hot_waits.lst` has the addresses. Per-frame relevant ones:
 
 | call site | bytes | function | API (timeout) | thread | blocks per frame? |
 |---|---|---|---|---|---|

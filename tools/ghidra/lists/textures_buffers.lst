@@ -1,0 +1,174 @@
+52ff00	BitmapTexture asyncCreate
+547620	PCDX11Texture asyncCreate
+530290	BitmapTexture request upload
+530390	BitmapTexture release
+530400	BitmapTexture get
+547b50	BitmapTexture ctor sync
+547c60	PCDX11Texture ctor
+547920	~PCDX11Texture
+52fd20	texture deferred update enqueue
+52fd50	52fd50
+52fda0	52fda0
+52fde0	52fde0
+547420	StaticPool alloc CreateBuffer
+51d380	pool suballoc
+552750	StaticVertexBuffer ctor
+552620	StaticIndexBuffer ctor
+5526b0	StaticVB deferred UpdateSubresource
+552560	StaticIB deferred UpdateSubresource
+540be0	PCDX11RenderMesh ctor
+543000	543000
+530ac0	530ac0
+530b50	530b50
+547330	SimpleStaticVB ctor
+547260	SimpleStaticIB ctor
+5471a0	SimpleDynamicVB ctor
+5398b0	deferred update push
+53c270	EndFrame
+53c220	pump present retry
+538d20	RenderDevice BeginFrame
+538ba0	deferred release
+538e30	538e30
+55f930	PCRenderDevice slot3
+4a0570	ThreadedFileSystem slot12
+49fb40	ThreadedFileSystem thread loop
+4a03a0	TFS slot0
+4a0ac0	TFS slot1
+4a00b0	TFS slot2
+4a0150	TFS slot7
+4a0180	TFS slot8
+49fa40	TFS slot11
+49fa90	TFS slot13
+49fad0	TFS slot14
+49fb20	TFS slot15
+4a02f0	TFS slot16
+4a0310	TFS slot17
+4a0340	TFS slot18
+49fc20	TFS slot19
+4a01e0	TFS slot20
+4a0210	TFS slot21
+4a0260	TFS slot22
+4a02b0	TFS slot23
+4a2f00	MSTFS slot24
+4a2e20	MSTFS slot25
+4a2e30	MSTFS slot26
+4a2df0	MSTFS slot27
+4a2e40	MSTFS thread create
+49feb0	TFS Receiver 0
+49fe70	TFS Receiver 1
+49ffe0	TFS Receiver 2
+4a0030	TFS Receiver 3
+49fd20	TFS Request 0
+49fd40	TFS Request 1
+49fda0	TFS Request 2
+49fdc0	TFS Request 4
+49fdd0	TFS Request 6
+49fe30	TFS Request 7
+49fe60	TFS Request 8
+4a2710	MSFS slot0
+4a1f90	MSFS slot12
+4a1880	MSFS slot11
+4a1a80	MSFS slot14
+4a1d40	MSFS slot15
+4a1bb0	MSFS slot17
+4a1c80	MSFS slot18
+4a15a0	MSFS slot19
+4a25f0	MSFS slot10
+4a1210	MSFS reader thread create
+4a1030	MSFS open
+4a1450	MSFS Request 0
+4a1e30	MSFS Request 1
+4a1460	MSFS Request 3
+4a1470	MSFS Request 4
+4a1da0	MSFS Request 5
+4a1db0	MSFS Request 6
+4a1e00	MSFS Request 7
+4a0da0	MSFileEventManager wait
+4a0df0	4a0df0
+4a0ea0	4a0ea0
+49ef10	get filesystem
+49ef20	open file helper
+5a75e0	ResolveReceiver 0
+5a66b0	ResolveReceiver 2
+5a8320	ResolveReceiver 3
+5a6dd0	ResolveReceiver 4
+5a70f0	ResolveObject 0
+5a8ef0	ResolveDecompressor Receiver 0
+5a8ed0	ResolveDecompressor Receiver 1
+5a9030	ResolveDecompressor Receiver 2
+5a9070	ResolveDecompressor Receiver 3
+5a9150	ResolveDecompressor 0
+5a8ea0	ResolveDecompressor 10
+5a8e50	ResolveDecompressor 11
+5a91a0	ResolveDecompressor 12
+5a9430	ResolveDecompressor 24
+5a94d0	RenderResourceSection 0
+5a64b0	RenderResourceSection 2
+5a6370	RenderResourceSection 4
+5a6190	RenderResourceSection 5
+5a61e0	RenderResourceSection 6
+5a6290	RenderResourceSection 8
+5a6230	RenderResourceSection 9
+5a6090	RenderResourceSection 10
+5a63a0	RenderResourceSection 12
+5a62e0	RenderResourceSection 13
+5a6310	RenderResourceSection 14
+5a6340	RenderResourceSection 15
+5a63e0	RenderResourceSection 17
+5aa2c0	ShaderLibSection 1
+5aa050	ShaderLibSection 4
+5aa000	ShaderLibSection 5
+5aa0a0	ShaderLibSection 6
+5aa100	ShaderLibSection 7
+5aa1b0	ShaderLibSection 12
+5aa130	ShaderLibSection 14
+5aa170	ShaderLibSection 15
+5aa1f0	ShaderLibSection 17
+5a9490	ShaderLibSection 10
+6217e0	StreamDeferredManager 1
+620500	StreamDeferredManager 2
+620ff0	StreamDeferredManager 4
+620520	StreamDeferredManager 5
+4d3050	JobChainWithThreads 0
+4d3100	JobChainWithThreads 3
+4d3200	JobChainWithThreads 4
+4d3260	JobChainWithThreads 6
+4d32c0	JobChainWithThreads 7
+4d3b30	JobChainWithThreads 8
+4d3690	job thread proc
+4d3a00	4d3a00
+4d3ab0	4d3ab0
+4d2f20	4d2f20
+4d3040	4d3040
+4d2a10	4d2a10
+4d2db0	4d2db0
+4d30a0	4d30a0
+4d3480	4d3480
+618920	618920
+618f30	618f30
+61dbe0	61dbe0
+61e720	61e720
+61fd20	61fd20
+61e310	61e310
+6339b0	game state 2
+633b30	game state 1
+61c3e0	61c3e0
+61fbc0	61fbc0
+61ff50	61ff50
+61c550	61c550
+61c9f0	61c9f0
+4a4330	4a4330
+4f7f90	4f7f90
+602820	602820
+5fa860	5fa860
+9a1ab0	9a1ab0
+9a1cd0	9a1cd0
+9a19d0	9a19d0
+4a6b00	4a6b00
+4a7d90	WinMain
+5e8b70	drm path
+5a8320	ResolveReceiver drm
+5a6660	5a6660
+4a4240	drm path2
+51c080	shaderlib drm
+51c240	prewarm

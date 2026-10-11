@@ -5,7 +5,7 @@ Target: DXHRDC.exe, stock sha256 `8266b6b4a5bf25f2f4e8de068aa3720f6289c962bb1c2b
 - Address rules: runtime address = `GetModuleHandleA(NULL) + RVA`, where RVA = VA - 0x400000. The .text file offset is VA - 0x400C00.
 - Verify the original bytes before every patch. The byte strings are in `engine.h` (`*_ORIG*`).
 - Confidence tags: **[V]** verified in this exe's disassembly. **[R]** matches RTTI or the rrika/cdcEngineDXHR reconstruction and agrees with the disassembly. **[?]** inferred or uncertain.
-- Sources: the full objdump in `binary/out/DXHRDC.objdump.txt`, existing decompiles in `binary/out/*.c`, and a fresh Ghidra 12.1.4 headless run on a copy of `binary/proj` (scratchpad). Class names come from MSVC RTTI (cdcEngineDXHR objtree.txt).
+- Sources: an objdump listing of the exe, Ghidra 12.1.4 headless decompiles, and a second Ghidra run. None of these are distributed; `tools/ghidra/README.md` shows how to regenerate them from your own exe. Class names come from MSVC RTTI (cdcEngineDXHR objtree.txt).
 - Globals:
   - `deviceManager` = `*(PCDX11DeviceManager**)0x12AB940` [V]. It is written once at 0x54C415.
   - `renderDevice` = `*(void**)0xEAAB48 - 0x10` [V]. The pointer at 0xEAAB48 addresses the CommonRenderDevice part of the object.
@@ -146,7 +146,7 @@ loop:
 
 Items are processed strictly in FIFO order, one at a time. A cancelled slot (item 0) is skipped and still frees its semaphore count.
 
-**Safe inline create protocol** (what `binary/patch/cave.s` does, and what a hook on 0x54C800 should do):
+**Safe inline create protocol** (what an earlier exe patch prototype did, not distributed, and what a hook on 0x54C800 should do):
 
 ```
 if (!item->pending) return;

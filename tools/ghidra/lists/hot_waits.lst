@@ -1,0 +1,65 @@
+54c800	awaitResource Sleep(1) loop
+54c850	cancelOrAwait Sleep(1) loop
+54a000	enqueue: WaitForSingleObject(free slots, INFINITE)
+54a100	async create worker
+53bad0	render thread proc
+53c270	EndFrame waits
+538d20	BeginFrame wait
+53c220	present retry wait (1 ms)
+49fa90	FS syncAll Sleep(10)
+49fad0	FS syncRequest Sleep(10)
+4a2d90	Sleep thunk (MSThreadedFileSystem vtbl +0x74)
+4a1ac0	MSFileSystem vtbl[16] Sleep(1) loop
+4efbc0	UberObject spawn syncAll
+61e720	loading: async queue empty check
+62ff60	level load (Sleep(5) loops)
+62fe90	per frame (Sleep(1) while loading)
+61fbc0	stream unit wait Sleep(5)
+61c3e0	unit transition wait Sleep(5)
+4a55f0	message pump Sleep(100) when inactive
+602820	Sleep(param) wrapper
+5fa860	Sleep(1) wait for data
+4d3b30	JobChainImplWithThreads::wait
+4d30a0	job queue full spin with Sleep(0)
+4d3690	job thread proc
+4d2f20	job threads shutdown
+452220	452220
+452330	RemoteFunctionCallerWin32
+549f60	DeviceManager vtbl[7]
+54a0b0	queue 2 enqueue: WaitForSingleObject(INFINITE)
+54a440	DeviceManager shutdown joins
+55f930	PCRenderDevice BeginFrame variant
+538e30	wait render idle event
+53bb20	RenderDevice dtor waits
+5b1290	PCSteamSaveStorageStreamRequest wait
+5b12b0	PCSteamSaveStorageStreamRequest poll
+5b1580	PCSteamSaveStorageStreamRequest dtor wait
+5cde93	5cde93
+6adaa0	event wait with timeout
+6ae230	6ae230
+6ae6f0	NetworkReceiveThread
+8f8350	GFx mutex wait
+8f86c0	GFx wait with timeout
+8f8dc0	GFx try wait
+8f8f40	8f8f40
+8f8fc0	8f8fc0
+8f8560	GFx Sleep(param)
+9a19d0	9a19d0
+9a1ab0	Sleep(10) loop
+9a1cd0	Sleep(10) loop + wait
+9f0e10	9f0e10
+9f0e80	9f0e80
+9f0ff0	9f0ff0
+9f1140	9f1140
+9f1430	9f1430
+9f1c60	9f1c60
+9f1d60	9f1d60
+9f79a0	9f79a0
+9f7ab0	9f7ab0
+a09ae0	a09ae0
+a09b50	a09b50
+a09c00	Sleep(us/1000)
+a09c20	Sleep(ms)
+a09c70	Sleep(20) until counter zero
+4a0da0	MSFileEventManager WaitForMultipleObjects INFINITE
+4d2a10	CPU topology probe Sleep(0)

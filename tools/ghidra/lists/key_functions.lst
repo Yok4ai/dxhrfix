@@ -1,0 +1,26 @@
+# Functions dxhrfix relies on (see ADDRESSES.md). VA<TAB>label. Input for Decomp.java.
+54C7D0	asyncRequest (replaced by Hook A)
+54C800	awaitResource (Hook A)
+54C850	cancelOrAwait (Hook A)
+54A000	asyncEnqueue (ring, free slot semaphore)
+54A100	async create worker thread proc
+54A440	device manager shutdown (Hook B)
+54A930	createDevice (SetMaximumFrameLatency patch at 0x54AB84)
+54C9F0	RenderContext present wrapper (profiler)
+53A170	renderFrame
+53BAD0	render thread proc
+53C270	EndFrame (waits at 0x53C2D7 and 0x53C2E5)
+538D20	RenderDevice BeginFrame
+54F000	PixelShaderTable queueUsed (Hook B)
+54F080	PixelShaderTable queueUsed4 (Hook B)
+54C910	~PixelShader (Hook B)
+5535F0	psRequest / requestShader (replaced by Hook B)
+54C8D0	precreateOne (replaced by Hook B)
+54C8A0	PixelShader asyncCreate
+553600	VertexShader asyncCreate
+49FA90	ThreadedFileSystem syncAll (Sleep(10) loop at 0x49FAAE)
+5A8320	ResolveReceiver requestComplete
+4A2E10	ThreadedFileSystem thread start
+49FB40	ThreadedFileSystem thread loop
+81A130	UI update (ShowCursor / SetCursor every frame)
+4B07A0	ClipCursor every frame

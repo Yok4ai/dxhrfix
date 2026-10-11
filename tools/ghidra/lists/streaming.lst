@@ -1,0 +1,49 @@
+62fe90	per frame function (game tick + render submit); Sleep(1) only while loading
+61dbe0	per frame FS pump: status + processAll (TFS 0x4a0570) on the main thread
+49ee20	install MSThreadedFileSystem as global FS (0xE3FBC8)
+49ede0	install ResolveDecompressor as global FS layer
+4a2e40	MSThreadedFileSystem ctor: creates FS thread (prio HIGHEST)
+49fb40	ThreadedFileSystem thread loop (FS thread): inner->processAll
+4a0470	ThreadedFileSystem ctor: 900 request slots, 2 MiB staging buffer
+4a0570	ThreadedFileSystem::processAll (main thread): delivers buffered data to receivers, throttle
+49feb0	ThreadedFileSystem::Receiver::receiveData (FS thread): copy into 2 MiB buffer
+49ffe0	ThreadedFileSystem::Receiver::requestFailed
+4a0030	ThreadedFileSystem::Receiver::requestComplete
+49fca0	ThreadedFileSystem::Request init: direct flag +0x22
+4a0210	ThreadedFileSystem mode push (mode 2 = deliver on FS thread)
+49fa90	ThreadedFileSystem::syncAll: processAll + Sleep(10) until idle
+49fad0	ThreadedFileSystem::syncRequest: processAll + Sleep(10) until request done
+5a91a0	ResolveDecompressor::processAll (FS thread)
+5a8ef0	ResolveDecompressor::Receiver::receiveData (FS thread, CDRM)
+4a1f90	MSFileSystem::processAll (FS thread): chunk sizes
+4a1210	MSFileSystem read submit: creates reader thread once
+5a75e0	ResolveReceiver::receiveData (main thread)
+5a8320	ResolveReceiver::requestComplete (main thread): section construct, dependent loads
+5a61e0	RenderResourceSection receiveData -> resource->vtbl[1]
+5a6230	RenderResourceSection construct -> resource->vtbl[3]
+547c60	PCDX11Texture::fill (main thread): memcpy into staging, then request upload
+530290	PCDX11BitmapTexture setup + request(async create, arg = staging data)
+52ff00	PCDX11BitmapTexture::asyncCreate (worker): CreateTexture2D/3D with initial data
+547620	PCDX11Texture::asyncCreate (worker): 0x52FF00 then frees staging
+530400	PCDX11BitmapTexture::get: await if pending (render thread)
+547b50	PCDX11BitmapTexture ctor (synchronous: request then await on caller)
+52fde0	PCDX11BitmapTexture DeferredUpdate (render thread): Map/Unmap dynamic texture
+540be0	PCDX11RenderModel vtbl[3] construct mesh (main thread)
+552750	PCDX11StaticVertexBuffer ctor: pool alloc + queue DeferredUpdate
+552620	PCDX11StaticIndexBuffer ctor
+547560	PCDX11StaticPool ctor
+547420	PCDX11StaticPool::alloc: CreateBuffer DEFAULT page, no initial data (main thread)
+5526b0	StaticVertexBuffer DeferredUpdate: UpdateSubresource (render thread)
+552560	StaticIndexBuffer DeferredUpdate: UpdateSubresource (render thread)
+5398b0	push DeferredUpdate to renderDevice list (+0x111584)
+53c270	EndFrame (main): waits render thread, hands over deferred updates
+538d20	BeginFrame (main): waits deferred-update consumption, deferred releases
+53a170	render frame (render thread): runs deferred updates first
+53c220	present retry from message pump
+549f60	DeviceManager vtbl[7]: wait event dm+0x17C if on creator thread
+4efbc0	UberObjectSection spawn child: syncAll if object not resident
+704ca0	UberObjectSection_DX3 vtbl[9] wrapper of 0x4EFBC0
+4a0b70	GameOption<bool> ctor
+4a0c70	GameOption<int> ctor
+a5fd10	register g_throttle_datastream
+a5fd30	register g_throttle_minimalDataThroughput

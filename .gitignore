@@ -10,3 +10,7 @@ build/
 dev/harness/logs/
 dev/harness/backups/
 *.log
+
+# python caches
+__pycache__/
+*.pyc
