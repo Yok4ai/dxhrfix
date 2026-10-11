@@ -37,7 +37,7 @@
 
 #ifdef DXHRFIX_HOOKS
 #include "../src/dxhrfix_hooks.h"
-#define PROXY_VERSION "0.4.0-profiler"
+#define PROXY_VERSION "0.4.0"
 #define DEFAULT_HOOKS 1
 #define DEFAULT_PRECREATE 1
 #else
@@ -68,8 +68,10 @@ struct Config {
     int cursor_fix;
     int cursor_refresh_ms;
 };
+// profiler defaults to 0 (diagnostics only): an older dxhrfix.ini without the
+// key must not turn it on.
 static Config g_cfg = {DEFAULT_HOOKS, DEFAULT_PRECREATE, 2, 1, 1, 0, 0,
-                       DEFAULT_HOOKS, 250, 40, 200, 1000, 2, 1,
+                       0, 250, 40, 200, 1000, 2, 1,
                        1, 250};
 
 static wchar_t g_exeDir[MAX_PATH];
