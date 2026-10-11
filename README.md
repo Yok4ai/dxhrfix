@@ -5,7 +5,7 @@
 <p align="center">
   <img src="docs/dxhrfix-detroit.webp" width="960" alt="Walking through the Detroit hub with dxhrfix 0.4.0, MangoHud overlay showing 75 fps and a flat frame time graph">
   <br>
-  <sub>Detroit hub with dxhrfix 0.4.0, 10 s at 30 fps. HUD at the top left: 75 fps, 1% low 74 to 75 fps, frame time flat at 13.3 ms. 1080p60 version: <a href="docs/dxhrfix-detroit.mp4">docs/dxhrfix-detroit.mp4</a>.</sub>
+  <sub>Detroit hub with dxhrfix 0.4.0, 8 s at 720p30. HUD at the top left: 75 fps, 1% low 74 to 75 fps, frame time flat at 13.3 ms. 1080p60 version: <a href="docs/dxhrfix-detroit.mp4">docs/dxhrfix-detroit.mp4</a>.</sub>
 </p>
 
 | Detroit hub, same route | stock | dxhrfix 0.4.0 |
