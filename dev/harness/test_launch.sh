@@ -24,18 +24,30 @@
 #                restored afterwards and verified by sha256).
 #   SYMS=f       symbol file passed to the DLL via DXHRFIX_SYMS (default:
 #                dxhrfix_syms.tsv next to the DLL under test, if present).
+#   STEAMAPPS=d  Steam library steamapps folder (default
+#                ~/.local/share/Steam/steamapps).
+#   DXHR_GAME=d  game folder (default $STEAMAPPS/common/Deus Ex Human
+#                Revolution Director's Cut).
+#   PROTON_DIR=d Proton install (default $STEAMAPPS/common/Proton 11.0).
+#   COMPAT=d     Proton prefix of app 238010 (default
+#                $STEAMAPPS/compatdata/238010).
+#   DXHRFIX_BACKUPS=d  where the stock DFEngine.dll copy and per run saves
+#                are kept (default dev/harness/backups, git ignored).
 set -u
 
 DLL_SRC=${1:?usage: test_launch.sh <dll path> [seconds]}
 SECS=${2:-60}
 STARTUP_MAX=${STARTUP_MAX:-60}   # seconds to wait for DXHRDC.exe to appear
 
-GAME="/mnt/Backup/SteamLibrary/steamapps/common/Deus Ex Human Revolution Director's Cut"
-PROTON="/mnt/Backup/SteamLibrary/steamapps/common/Proton 11.0/proton"
-WINESERVER="/mnt/Backup/SteamLibrary/steamapps/common/Proton 11.0/files/bin/wineserver"
-COMPAT=/mnt/Backup/SteamLibrary/steamapps/compatdata/238010
-BACKUPS=/mnt/Backup/dxhrdc-fix/backups
 HERE=$(cd "$(dirname "$0")" && pwd)
+# Paths; override through the environment for your machine.
+STEAMAPPS=${STEAMAPPS:-$HOME/.local/share/Steam/steamapps}
+GAME=${DXHR_GAME:-"$STEAMAPPS/common/Deus Ex Human Revolution Director's Cut"}
+PROTON_DIR=${PROTON_DIR:-"$STEAMAPPS/common/Proton 11.0"}
+PROTON="$PROTON_DIR/proton"
+WINESERVER="$PROTON_DIR/files/bin/wineserver"
+COMPAT=${COMPAT:-$STEAMAPPS/compatdata/238010}
+BACKUPS=${DXHRFIX_BACKUPS:-$HERE/backups}
 LOGDIR=$HERE/logs
 STEAMLOG=$HOME/steam-238010.log
 SHADERLOG=$HOME/.local/share/Steam/logs/shader_log.txt

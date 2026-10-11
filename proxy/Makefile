@@ -13,7 +13,7 @@ test/test_proxy.exe: test/test_proxy.cpp
 	$(CXX) -O2 -Wall -static-libgcc -static-libstdc++ -o $@ $<
 
 # Runs under host wine in a scratch dir (no DFEngine_orig.dll there, so the stub is used).
-TESTDIR ?= /tmp/claude-1000/-mnt-Backup-SteamLibrary-steamapps-common-Deus-Ex-Human-Revolution-Director-s-Cut/1a6c9b22-e870-469d-a782-b4d3046827f6/scratchpad/proxy/unittest
+TESTDIR ?= $(abspath ../build/test/proxy)
 test: DFEngine.dll test/test_proxy.exe
 	rm -rf $(TESTDIR) && mkdir -p $(TESTDIR)
 	cp DFEngine.dll test/test_proxy.exe $(TESTDIR)/

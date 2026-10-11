@@ -4,7 +4,7 @@ CXXFLAGS := -O2 -std=c++11 -Wall -Wextra -static-libgcc -static-libstdc++
 LDFLAGS  := -static
 
 WINE        ?= /usr/bin/wine
-SCRATCH     := /tmp/claude-1000/-mnt-Backup-SteamLibrary-steamapps-common-Deus-Ex-Human-Revolution-Director-s-Cut/1a6c9b22-e870-469d-a782-b4d3046827f6/scratchpad/hooklib
+SCRATCH     ?= $(abspath ../build/test/hooklib)
 export WINEPREFIX := $(SCRATCH)/wineprefix
 export WINEDEBUG  := -all
 

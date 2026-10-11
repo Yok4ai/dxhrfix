@@ -19,9 +19,11 @@ test: dist/DFEngine.dll
 	$(MAKE) -C src/test test
 
 harness: dist/DFEngine.dll
-	harness/test_launch.sh dist/DFEngine.dll 60
+	dev/harness/test_launch.sh dist/DFEngine.dll 60
 
 clean:
-	rm -rf dist
+	rm -rf build
+	$(MAKE) -C hooklib clean
+	$(MAKE) -C src/test clean
 
 .PHONY: all test harness clean

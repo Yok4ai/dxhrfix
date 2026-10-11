@@ -1,0 +1,12 @@
+# build output
+build/
+*.o
+*.obj
+*.exe
+*.dll
+!dist/DFEngine.dll
+
+# test and harness output
+dev/harness/logs/
+dev/harness/backups/
+*.log
