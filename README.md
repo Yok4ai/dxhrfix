@@ -3,9 +3,9 @@
 **Stutter fix for Deus Ex: Human Revolution Director's Cut.** Built from a disassembly of the game, it patches the engine defects that cause the hitching instead of hiding them. One DLL swap, no loader, no launch options.
 
 <p align="center">
-  <img src="docs/hud-fixed.gif" width="510" alt="MangoHud overlay with dxhrfix 0.4.0: 75 fps, 1% low 75 fps, flat frame time graph while walking through Detroit">
+  <img src="docs/dxhrfix-detroit.webp" width="960" alt="Walking through the Detroit hub with dxhrfix 0.4.0, MangoHud overlay showing 75 fps and a flat frame time graph">
   <br>
-  <sub>Walking through the Detroit hub with dxhrfix 0.4.0. Frame time flat at 13.3 ms, 1% low 74 to 75 fps.</sub>
+  <sub>Detroit hub with dxhrfix 0.4.0, 10 s at 30 fps. HUD at the top left: 75 fps, 1% low 74 to 75 fps, frame time flat at 13.3 ms. 1080p60 version: <a href="docs/dxhrfix-detroit.mp4">docs/dxhrfix-detroit.mp4</a>.</sub>
 </p>
 
 | Detroit hub, same route | stock | dxhrfix 0.4.0 |
@@ -14,7 +14,7 @@
 | frames over 100 ms | 2 to 64 | 0 |
 | worst frame | 155 to 4337 ms | 55 ms |
 
-Full numbers, chart and method under [Results](#results). A 15 s clip of the same walk at 1080p60: [docs/dxhrfix-detroit.mp4](docs/dxhrfix-detroit.mp4).
+Full numbers, chart and method under [Results](#results).
 
 **Install in three steps:** download the zip from the releases page, extract the `dxhrfix-<version>` folder into the game folder, run `install.sh` (Linux) or `install.bat` (Windows) from inside it. Details under [Install](#install), undo with `revert.sh` or Steam's Verify integrity.
 
@@ -73,6 +73,10 @@ Measured on one machine (Linux, Proton 11, DXVK, NVIDIA GPU, Ryzen 5 3600X), sam
 ![Frame times, stock vs dxhrfix](docs/frametimes.png)
 
 In each 0.4 run the one remaining frame over 50 ms was 55 to 56 ms. About 13,000 pixel shaders were created on the precreate pool instead of on the render thread, and the longest time the render thread still had to wait for the worker dropped to microseconds. The stock runs were capped at 72 fps by MangoHud; the 0.3 and 0.4 runs ran at 75 fps (vsync or limiter), which is why their baseline sits at 13.3 ms instead of 13.9 ms.
+
+![MangoHud overlay during the dxhrfix 0.4.0 run: 75 fps, 1% low 74 to 75 fps, flat frame time graph](docs/hud-fixed.gif)
+
+The MangoHud corner while walking, 8 s at 50 fps.
 
 ![Detroit hub, billboards near the LIMB clinic, dxhrfix 0.4.0](docs/detroit-billboards.jpg)
 
@@ -203,7 +207,7 @@ The repository contains no decompiled code and no disassembly of the game. [`too
 | `tools/gen_syms.py` | builds `dist/dxhrfix_syms.tsv` from a Ghidra function list and the exe's RTTI |
 | `tools/frametime_stats.py`, `tools/frametime_chart.py` | hitch statistics and the chart above from MangoHud logs |
 | `dev/` | Linux test harness and the measurement protocol (`TEST_PROTOCOL.md`) |
-| `docs/` | images and the video clip used in this README |
+| `docs/` | images and clips used in this README |
 | `CHANGELOG.md` | version history |
 
 ## Related work
